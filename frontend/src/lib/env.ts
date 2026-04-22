@@ -1,0 +1,73 @@
+import { env } from '$env/dynamic/public';
+
+export const SUPABASE_URL = env.PUBLIC_SUPABASE_URL || '';
+export const SUPABASE_ANON_KEY = env.PUBLIC_SUPABASE_ANON_KEY || '';
+
+export const MAGICBLOCK_RPC = env.PUBLIC_MAGICBLOCK_RPC || 'https://rpc.magicblock.app/devnet/';
+export const SOLANA_RPC = env.PUBLIC_SOLANA_RPC || env.PUBLIC_MAGICBLOCK_RPC || 'https://api.devnet.solana.com';
+
+export const HERMES_URL = env.PUBLIC_HERMES_URL || 'https://hermes.pyth.network';
+export const PYTH_API_KEY = env.PUBLIC_PYTH_API_KEY || '';
+
+export const HASHFOX_PROGRAM_ID =
+	env.PUBLIC_HASHFOX_PROGRAM_ID || '7ApsvRSqfqCA5YbSSvAmeboFFU7hyB2HJBCpEiwmLSSi';
+
+export const WEB3AUTH_CLIENT_ID = env.PUBLIC_WEB3AUTH_CLIENT_ID || '';
+
+export const NEWS_API_URL = env.PUBLIC_NEWS_API_URL || 'https://min-api.cryptocompare.com/data/v2/news/';
+
+export const STREAM_API_KEY = env.PUBLIC_STREAM_API_KEY || '';
+
+// Crypto feeds (blockberg)
+export const CRYPTO_FEEDS = {
+	BTC:  '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
+	ETH:  '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
+	BNB:  '0x2f95862b045670cd22bee3114c39763a4a08beeb663b145d283c31d7d1101c4f',
+	SOL:  '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d',
+	XRP:  '0xec5d399846a9209f3fe5881d70aae9268c94339ff9817e8d18ff19fa05eea1c8',
+	DOGE: '0xdcef50dd0a4cd2dcc17e45df1676dcb336a11a61c69df7a0299b0150c672d25c',
+	ADA:  '0x2a01deaec9e51a579277b34b122399984d0bbf57e2458a7e42fecd2829867a0d',
+	TRX:  '0x67aed5a24fdad045475e7195c98a98aea119c763f272d4523f5bac93a4f33c2b',
+	AVAX: '0x93da3352f9f1d105fdfe4971cfa80e9dd777bfc5d0f683ebb6e1294b92137bb7',
+	LINK: '0x8ac0c70fff57e9aefdf5edf44b51d62c2d433653cbb2cf5cc06bb115af04d221',
+	DOT:  '0xca3eed9b267293f6595901c734c7525ce8ef49adafe8284606ceb307afa2ca5b',
+	MATIC:'0xffd11c5a1cfd42f80afb2df4d9f264c15f956d68153335374ec10722edd70472',
+	LTC:  '0x6e3f3fa8253588df9326580180233eb791e03b443a3ba7a1d892e73874e19a54',
+	UNI:  '0x78d185a741d07edb3412b09008b7c5cfb9bbbd7d568bf00ba737b456ba171501',
+	ATOM: '0xb00b60f88b03a6a625a8d1c048c3f66653edf217439983d037e7222c4e612819',
+	NEAR: '0xc415de8d2eba7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750',
+	APT:  '0x03ae4db29ed4ae33d323568895aa00337e658e348b37509f5372ae51f0af00d5',
+	SUI:  '0x23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744',
+	INJ:  '0x7a5bc1d2b56ad029048cd63964b3ad2776eadf812edc1a43a31406cb54bff592',
+	TAO:  '0x410f41de235f2db824e562ea7ab2d3d3d4ff048316c61d629c0b93f58584e1af'
+} as const;
+
+// Traditional feeds (mockrock): stocks, forex, metals, global equities
+export const TRADITIONAL_FEEDS = {
+	AAPL:   '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
+	TSLA:   '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
+	NVDA:   '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
+	AMZN:   '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
+	MSFT:   '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
+	GOOGL:  '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
+	META:   '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
+	NFLX:   '0x8376cfd7ca8bcdf372ced05307b24dced1f15b1afafdeff715664598f15a3dd2',
+	JPM:    '0x7f4f157e57bfcccd934c566df536f34933e74338fe241a5425ce561acdab164e',
+	AMD:    '0x3622e381dbca2efd1859253763b1adc63f7f9abb8e76da1aa8e638a57ccde93e',
+	EURUSD: '0xa995d00bb36a63cef7fd2c287dc105fc8f3d93779f062f09551b0af3e81ec30b',
+	GBPUSD: '0x84c2dde9633d93d1bcad84e7dc41c9d56578b7ec52fabedc1f335d673df0a7c1',
+	USDJPY: '0xef2c98c804ba503c6a707e38be4dfbb16683775f195b091252bf24693042fd52',
+	AUDUSD: '0x67a6f93030420c1c9e3fe37c1ab6b77966af82f995944a9fefce357a22854a80',
+	USDCHF: '0x0b1e3297e69f162877b577b0d6a47a0d63b2392bc8499e6540da4187a63e28f8',
+	USDCAD: '0x3112b03a41c910ed446852aacf67118cb1bec67b2cd0b9a214c58cc0eaa2ecca',
+	XAUUSD: '0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2',
+	XAGUSD: '0xf2fb02c32b055c805e7238d628e5e9dadef274376114eb1f012337cabe93871e',
+	BABA:   '0x72bc23b1d0afb1f8edef20b7fb60982298993161bc0fd749587d6f60cd1ee9a3',
+	COIN:   '0xfee33f2a978bf32dd6b662b65ba8083c6773b494f8401194ec1870c640860245'
+} as const;
+
+export const PYTH_FEEDS = { ...CRYPTO_FEEDS, ...TRADITIONAL_FEEDS };
+
+export type CryptoSymbol = keyof typeof CRYPTO_FEEDS;
+export type TraditionalSymbol = keyof typeof TRADITIONAL_FEEDS;
+export type PythSymbol = keyof typeof PYTH_FEEDS;
