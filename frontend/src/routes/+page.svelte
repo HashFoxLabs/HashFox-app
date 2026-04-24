@@ -1,18 +1,12 @@
 <script lang="ts">
-	import NewsDiscoveryPanel from '$lib/components/NewsDiscoveryPanel.svelte';
 	import SocialFeed from '$lib/components/social/SocialFeed.svelte';
+	import NewsDiscoveryPanel from '$lib/components/NewsDiscoveryPanel.svelte';
 	import BacktestingTerminal from '$lib/components/backtesting/BacktestingTerminal.svelte';
 </script>
 
 <main class="landing">
-	<NewsDiscoveryPanel />
 	<SocialFeed />
-
-	<section class="backtest-section">
-		<div class="backtest-shell">
-			<BacktestingTerminal />
-		</div>
-	</section>
+	<NewsDiscoveryPanel />
 </main>
 
 <style>
