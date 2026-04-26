@@ -434,6 +434,7 @@
 	.chat-shell {
 		display: flex; flex-direction: column;
 		width: 100%; height: 100%;
+		min-height: 0;
 		background: #0a0a0a;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 		overflow: hidden;
@@ -444,6 +445,7 @@
 	}
 
 	.chat-head-wrap {
+		flex: 0 0 auto;
 		border-bottom: 1px solid #1f1f1f;
 		background: #0d0d0d;
 	}
@@ -482,7 +484,10 @@
 	.icon-btn.video-btn:hover:not(:disabled) { color: #00ff66; }
 
 	.chat-body {
-		flex: 1; overflow-y: auto;
+		flex: 1 1 0;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: 18px 24px;
 		display: flex; flex-direction: column; gap: 14px;
 		background: #050505;
@@ -606,6 +611,7 @@
 	.rb-close:hover { color: #fff; }
 
 	.chat-foot-wrap {
+		flex: 0 0 auto;
 		border-top: 1px solid #1f1f1f;
 		background: #0d0d0d;
 	}

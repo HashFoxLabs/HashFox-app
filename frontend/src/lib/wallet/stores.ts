@@ -26,6 +26,7 @@ export const walletStore = writable<{
 	embeddedEmail: string | null;
 	embeddedName: string | null;
 	embeddedImage: string | null;
+	profileHydrated: boolean;
 }>({
 	adapter: null,
 	connected: false,
@@ -38,8 +39,13 @@ export const walletStore = writable<{
 	isEmbedded: false,
 	embeddedEmail: null,
 	embeddedName: null,
-	embeddedImage: null
+	embeddedImage: null,
+	profileHydrated: false
 });
+
+export function setWalletUsername(username: string) {
+	walletStore.update((s) => ({ ...s, username }));
+}
 
 export const connectionStore = writable<Connection | null>(null);
 
@@ -96,7 +102,8 @@ class WalletManager {
 					connecting: false,
 					publicKey: adapter.publicKey,
 					wallet: adapter,
-					isEmbedded: false
+					isEmbedded: false,
+					profileHydrated: false
 				}));
 				localStorage.setItem('solana-wallet', adapter.name);
 				if (adapter.publicKey) {
@@ -118,7 +125,8 @@ class WalletManager {
 					isEmbedded: false,
 					embeddedEmail: null,
 					embeddedName: null,
-					embeddedImage: null
+					embeddedImage: null,
+					profileHydrated: false
 				}));
 				localStorage.removeItem('solana-wallet');
 			};
@@ -193,7 +201,8 @@ class WalletManager {
 				isEmbedded: true,
 				embeddedEmail: result.userInfo.email ?? null,
 				embeddedName: result.userInfo.name ?? null,
-				embeddedImage: result.userInfo.profileImage ?? null
+				embeddedImage: result.userInfo.profileImage ?? null,
+				profileHydrated: false
 			}));
 			localStorage.setItem('solana-wallet', EMBEDDED_WALLET_NAME);
 			void hydrateProfile(result.publicKey.toBase58());
@@ -221,7 +230,8 @@ class WalletManager {
 					isEmbedded: false,
 					embeddedEmail: null,
 					embeddedName: null,
-					embeddedImage: null
+					embeddedImage: null,
+					profileHydrated: false
 				}));
 				localStorage.removeItem('solana-wallet');
 			} else {
@@ -271,10 +281,12 @@ async function hydrateProfile(walletAddress: string) {
 			...s,
 			username: profile?.username ?? null,
 			avatarUrl: profile?.avatar_url ?? null,
-			bannerUrl: profile?.banner_url ?? null
+			bannerUrl: profile?.banner_url ?? null,
+			profileHydrated: true
 		}));
 	} catch (err) {
 		console.warn('[WALLET] profile hydrate failed', err);
+		walletStore.update((s) => ({ ...s, profileHydrated: true }));
 	}
 }
 

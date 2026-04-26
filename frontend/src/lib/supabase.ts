@@ -46,6 +46,41 @@ export async function fetchProfile(walletAddress: string): Promise<UserProfile |
 	return (data as UserProfile) ?? null;
 }
 
+export async function isUsernameAvailable(
+	username: string,
+	excludingWallet?: string
+): Promise<boolean> {
+	const sb = getSupabase();
+	if (!sb) return true;
+	let query = sb.from('users').select('wallet_address').eq('username', username).limit(1);
+	if (excludingWallet) query = query.neq('wallet_address', excludingWallet);
+	const { data, error } = await query.maybeSingle();
+	if (error && error.code !== 'PGRST116') {
+		console.warn('[supabase] username availability check error', error.message);
+		return false;
+	}
+	return !data;
+}
+
+export async function upsertUsername(
+	walletAddress: string,
+	username: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const sb = getSupabase();
+	if (!sb) return { ok: false, error: 'Database unavailable' };
+	const available = await isUsernameAvailable(username, walletAddress);
+	if (!available) return { ok: false, error: 'Username already taken' };
+	const { error } = await sb
+		.from('users')
+		.upsert({ wallet_address: walletAddress, username }, { onConflict: 'wallet_address' });
+	if (error) {
+		// Unique-violation from a concurrent writer
+		if (error.code === '23505') return { ok: false, error: 'Username already taken' };
+		return { ok: false, error: error.message };
+	}
+	return { ok: true };
+}
+
 export async function updateAvatar(walletAddress: string, avatarUrl: string): Promise<void> {
 	const sb = getSupabase();
 	if (!sb) return;

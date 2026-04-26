@@ -3,12 +3,11 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import WalletButton from '$lib/wallet/WalletButton.svelte';
-	import { walletStore } from '$lib/wallet/stores';
+	import CreateUsernameModal from '$lib/profile/CreateUsernameModal.svelte';
+	import { walletStore, setWalletUsername } from '$lib/wallet/stores';
 	import { selectedMarket } from '$lib/stores/selectedMarket';
 	import {
 		pythPrices,
-		pythConnectionStatus,
-		pythLastUpdate,
 		startPythStream,
 		stopPythStream
 	} from '$lib/stores/pythPrices';
@@ -46,12 +45,6 @@
 	let prices: Record<string, any> = {};
 	pythPrices.subscribe((p) => (prices = p));
 
-	let pythStatus = 'Initializing...';
-	pythConnectionStatus.subscribe((s) => (pythStatus = s));
-
-	let pythLastUpdateTs = 0;
-	pythLastUpdate.subscribe((t) => (pythLastUpdateTs = t));
-
 	let connectedWallet: any = null;
 	let walletAddress = '';
 	let walletBalanceSol = 0;
@@ -70,6 +63,10 @@
 	let showDevnetWalletFundingModal = false;
 	let fundingPopupSolBalance = 0;
 	let fundingPopupAddress = '';
+
+	let showUsernameModal = false;
+	let usernameModalDismissedFor: string | null = null;
+	let usernameDefaultName: string | null = null;
 
 	let disconnectSessionLoading = false;
 	let initializeLoading = false;
@@ -90,6 +87,7 @@
 					if (!wasConnected) sessionStorage.removeItem(DEVNET_FUNDING_DISMISS_KEY);
 				}
 			}
+			maybeOfferUsername();
 			void refreshStatus();
 		} else {
 			walletAddress = '';
@@ -102,8 +100,32 @@
 			showSessionFundModal = false;
 			showSessionActiveNotice = false;
 			showDevnetWalletFundingModal = false;
+			showUsernameModal = false;
+			usernameModalDismissedFor = null;
+			usernameDefaultName = null;
 		}
 	});
+
+	function maybeOfferUsername() {
+		if (!connectedWallet?.connected || !walletAddress) return;
+		if (!connectedWallet.profileHydrated) return;
+		if (connectedWallet.username) return;
+		if (usernameModalDismissedFor === walletAddress) return;
+		if (showUsernameModal) return;
+		usernameDefaultName = connectedWallet.embeddedName || connectedWallet.embeddedEmail || null;
+		showUsernameModal = true;
+	}
+
+	function handleUsernameSaved(name: string) {
+		setWalletUsername(name);
+		showUsernameModal = false;
+		maybeOfferDevnetFunding();
+	}
+
+	function dismissUsernameModal() {
+		usernameModalDismissedFor = walletAddress;
+		showUsernameModal = false;
+	}
 
 	async function refreshStatus() {
 		if (!connectedWallet?.connected) return;
@@ -137,6 +159,7 @@
 		if (sessionStorage.getItem(DEVNET_FUNDING_DISMISS_KEY)) return;
 		if (!connectedWallet?.connected) return;
 		if (showSessionFundModal) return;
+		if (showUsernameModal) return;
 		// Always prompt embedded wallets on first connect (they start at 0 SOL);
 		// external wallets only when balance is actually low.
 		if (!connectedWallet.isEmbedded && walletBalanceSol >= 0.05) return;
@@ -379,13 +402,13 @@
 			<a href="/history" class="nav-link" class:active={$page.url.pathname.startsWith('/history')}>HISTORY</a>
 		</div>
 
-		<div class="pyth-status">
-			<span class="status-label">PYTH:</span>
-			<span class="status-value">{pythStatus}</span>
-			{#if pythLastUpdateTs > 0}
-				<span class="status-age">{Math.floor((Date.now() - pythLastUpdateTs) / 1000)}s ago</span>
-			{/if}
-		</div>
+		<a
+			href="/backtesting"
+			class="backtesting-btn"
+			class:active={$page.url.pathname.startsWith('/backtesting')}
+		>
+			BACKTESTING
+		</a>
 
 		<div class="magicblock-status">
 			<span class="status-label">HASHFOX:</span>
@@ -534,6 +557,15 @@
 			</div>
 		</div>
 	</div>
+
+	{#if showUsernameModal && walletAddress}
+		<CreateUsernameModal
+			walletAddress={walletAddress}
+			defaultName={usernameDefaultName}
+			onSave={handleUsernameSaved}
+			onDismiss={dismissUsernameModal}
+		/>
+	{/if}
 
 	{#if showDevnetWalletFundingModal}
 		<div
@@ -823,7 +855,6 @@
 	.nav-link.active { color: #ff9500; border-color: #ff9500; }
 
 
-	.pyth-status,
 	.magicblock-status {
 		display: flex;
 		flex-flow: row nowrap;
@@ -843,7 +874,26 @@
 
 	.status-label { color: #666; font-size: var(--nav-label-fs); letter-spacing: 0.5px; }
 	.status-value { color: #00ff00; font-weight: bold; font-size: var(--nav-fs); }
-	.status-age { color: #999; font-size: var(--nav-meta-fs); }
+
+	.backtesting-btn {
+		display: inline-flex;
+		align-items: center;
+		color: #ff9500;
+		background: #000;
+		border: 1px solid #ff9500;
+		text-decoration: none;
+		font-family: 'Courier New', monospace;
+		font-size: var(--nav-fs);
+		font-weight: bold;
+		letter-spacing: 0.15em;
+		padding: var(--nav-pad-y) calc(var(--nav-pad-x) + 2px);
+		flex: 0 0 auto;
+		white-space: nowrap;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+	.backtesting-btn:hover { background: #ff9500; color: #000; }
+	.backtesting-btn.active { background: #ff9500; color: #000; }
 
 	.magicblock-status > * { flex: 0 0 auto; white-space: nowrap; }
 
