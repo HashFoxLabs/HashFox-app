@@ -2,11 +2,13 @@
 	import SocialFeed from '$lib/components/social/SocialFeed.svelte';
 	import NewsDiscoveryPanel from '$lib/components/NewsDiscoveryPanel.svelte';
 	import BacktestingTerminal from '$lib/components/backtesting/BacktestingTerminal.svelte';
+	import AlertFeed from '$lib/components/AlertFeed.svelte';
 </script>
 
 <main class="landing">
 	<SocialFeed />
 	<NewsDiscoveryPanel />
+	<AlertFeed />
 </main>
 
 <style>
