@@ -5,10 +5,10 @@
 	const MAX_DISPLAY = 10;
 
 	const SECTIONS = [
-		{ event: 'trader_whale_trade', label: '🐳 WHALE TRADES' },
-		{ event: 'price_spike',        label: '🔥 PRICE SPIKES' },
-		{ event: 'market_volume_spike', label: '📊 VOLUME SPIKES' }
-	];
+		{ event: 'trader_whale_trade', label: 'WHALE TRADES' },
+		{ event: 'price_spike', label: 'PRICE SPIKES' },
+		{ event: 'market_volume_spike', label: 'VOLUME SPIKES' }
+	] as const;
 
 	function formatUsd(val: unknown): string {
 		return '$' + Number(val ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -16,13 +16,6 @@
 
 	function formatPrice(val: unknown): string {
 		return Number(val ?? 0).toFixed(2);
-	}
-
-	function formatDate(val: unknown): string {
-		const ts = Number(val ?? 0);
-		if (!ts) return '—';
-		const d = new Date(ts < 1e12 ? ts * 1000 : ts);
-		return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	}
 
 	function describe(alert: AlertEvent): string {
@@ -87,179 +80,277 @@
 	});
 </script>
 
-<div class="alert-grid">
-	{#each SECTIONS as section}
-		<div class="alert-feed">
-			<div class="feed-header">{section.label}</div>
-			{#if byEvent[section.event].length === 0}
-				<div class="empty">Waiting for alerts…</div>
-			{:else}
-				{#each byEvent[section.event] as alert (alert.id)}
-					{#if alert.event === 'trader_whale_trade'}
-						<div class="alert-card">
-							<div class="card-top">
-								<span class="market">{String(alert.data.question ?? alert.data.market ?? '—')}</span>
-								<span class="timestamp">{timeAgo(alert.receivedAt)}</span>
-							</div>
-							<div class="whale-row">
-								<span class="tag {String(alert.data.outcome).toLowerCase()}">{alert.data.outcome ?? '—'}</span>
-								<span class="tag side">{alert.data.side ?? '—'}</span>
-								<span class="amount">{formatUsd(alert.data.amount_usd)}</span>
-							</div>
-							<div class="whale-row secondary">
-								<span>Price <strong>{formatPrice(alert.data.price)}</strong></span>
-								<span>{formatDate(alert.data.confirmed_at)}</span>
-							</div>
-						</div>
-					{:else if alert.event === 'price_spike'}
-						<div class="alert-card">
-							<div class="card-top">
-								<span class="market">{String(alert.data.question ?? alert.data.event_slug ?? alert.data.condition_id ?? '—')}</span>
-								<span class="timestamp">{timeAgo(alert.receivedAt)}</span>
-							</div>
-							<div class="whale-row">
-								<span class="tag {String(alert.data.spike_direction) === 'up' ? 'yes' : 'no'}">
-									{alert.data.spike_direction === 'up' ? '▲' : '▼'} {alert.data.spike_direction}
-								</span>
-								<span class="tag side">{alert.data.outcome ?? '—'}</span>
-								<span class="amount">{Number(alert.data.spike_pct ?? 0).toFixed(1)}%</span>
-							</div>
-						</div>
-					{:else if alert.event === 'market_volume_spike'}
-						<div class="alert-card">
-							<div class="card-top">
-								<span class="market">{String(alert.data.condition_id ?? '—')}</span>
-								<span class="timestamp">{timeAgo(alert.receivedAt)}</span>
-							</div>
-							<div class="whale-row">
-								<span class="tag side">{alert.data.timeframe ?? '—'}</span>
-								<span class="amount">+{Number(alert.data.spike_pct ?? 0).toFixed(1)}%</span>
-							</div>
-							<div class="whale-row secondary">
-								<span>{alert.data.txns ?? 0} trades occurred</span>
-								<span>{formatUsd(alert.data.current_volume_usd)} volume</span>
-							</div>
-						</div>
-					{:else}
-						<div class="alert-card">
-							<div class="card-top">
-								<span class="market">{marketName(alert)}</span>
-								<span class="timestamp">{timeAgo(alert.receivedAt)}</span>
-							</div>
-							<div class="desc">{describe(alert)}</div>
-						</div>
-					{/if}
-				{/each}
-			{/if}
+<section class="news-discovery alerts-section">
+	<div class="inner">
+		<div class="header">
+			<div class="h-left">
+				<div class="title">Alerts</div>
+			</div>
 		</div>
-	{/each}
-</div>
+
+		<div class="grid">
+			{#each SECTIONS as section, i}
+				<div
+					class="panel"
+					class:col-first={i === 0}
+					class:col-last={i === SECTIONS.length - 1}
+				>
+					<div class="panel-head">
+						<span class="ph-title">{section.label}</span>
+						<span class="ph-meta">{byEvent[section.event].length} items</span>
+					</div>
+					<div class="panel-body scroll">
+						{#if byEvent[section.event].length === 0}
+							<div class="state">Waiting for alerts…</div>
+						{:else}
+							{#each byEvent[section.event] as alert (alert.id)}
+								{#if alert.event === 'trader_whale_trade'}
+									<div class="item">
+										<div class="rmeta">
+											<span class="badge">{String(alert.data.outcome ?? '—').toUpperCase()}</span>
+											<span class="badge dim">{timeAgo(alert.receivedAt)}</span>
+										</div>
+										<div class="it-title">{String(alert.data.question ?? alert.data.market ?? '—')}</div>
+										<div class="rmeta tail">
+											<span class="badge dim">{(alert.data.side ?? '—').toString().toUpperCase()}</span>
+											<span class="badge">{formatUsd(alert.data.amount_usd)}</span>
+											<span class="badge dim">@{formatPrice(alert.data.price)}</span>
+										</div>
+									</div>
+								{:else if alert.event === 'price_spike'}
+									<div class="item">
+										<div class="rmeta">
+											<span
+												class="badge"
+												class:badge-up={String(alert.data.spike_direction).toLowerCase() === 'up'}
+												class:badge-down={String(alert.data.spike_direction).toLowerCase() === 'down'}
+											>
+												{String(alert.data.spike_direction ?? '—').toUpperCase()}
+											</span>
+											<span class="badge dim">{timeAgo(alert.receivedAt)}</span>
+										</div>
+										<div class="it-title">
+											{String(alert.data.question ?? alert.data.event_slug ?? alert.data.condition_id ?? '—')}
+										</div>
+										<div class="rmeta tail">
+											<span class="badge dim">{String(alert.data.outcome ?? '—')}</span>
+											<span class="badge">{Number(alert.data.spike_pct ?? 0).toFixed(1)}%</span>
+										</div>
+									</div>
+								{:else if alert.event === 'market_volume_spike'}
+									<div class="item">
+										<div class="rmeta">
+											<span class="badge">{String(alert.data.timeframe ?? '—').toUpperCase()}</span>
+											<span class="badge dim">{timeAgo(alert.receivedAt)}</span>
+										</div>
+										<div class="it-title">{String(alert.data.condition_id ?? '—')}</div>
+										<div class="rmeta tail">
+											<span class="badge">+{Number(alert.data.spike_pct ?? 0).toFixed(1)}%</span>
+											<span class="badge dim">{alert.data.txns ?? 0} txns</span>
+											<span class="badge dim">{formatUsd(alert.data.current_volume_usd)} vol</span>
+										</div>
+									</div>
+								{:else}
+									<div class="item">
+										<div class="rmeta">
+											<span class="badge">{alert.event}</span>
+											<span class="badge dim">{timeAgo(alert.receivedAt)}</span>
+										</div>
+										<div class="it-title">{marketName(alert)}</div>
+										<p class="body">{describe(alert)}</p>
+									</div>
+								{/if}
+							{/each}
+						{/if}
+					</div>
+				</div>
+			{/each}
+		</div>
+	</div>
+</section>
 
 <style>
-	.alert-grid {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 12px;
-	}
-
-	.alert-feed {
-		background: #0a0a0a;
-		border: 1px solid #333;
-		border-radius: 4px;
-		font-family: 'Courier New', monospace;
-		font-size: 12px;
-		color: #ccc;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-
-	.feed-header {
-		padding: 8px 12px;
-		font-size: 10px;
-		letter-spacing: 0.1em;
-		color: #ff9500;
+	/* Align with NewsDiscoveryPanel: chrome, typography, panel shell */
+	.news-discovery.alerts-section {
+		background: #000;
 		border-bottom: 1px solid #222;
-		background: #111;
 	}
-
-	.empty {
-		padding: 16px 12px;
-		color: #555;
-		font-size: 11px;
+	.inner {
+		max-width: none;
+		margin: 0;
+		padding: 18px 0 22px;
 	}
-
-	.alert-card {
-		padding: 10px 12px;
-		border-bottom: 1px solid #1a1a1a;
+	.header {
 		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.alert-card:last-child {
-		border-bottom: none;
-	}
-
-	.card-top {
-		display: flex;
+		align-items: flex-end;
 		justify-content: space-between;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.market {
-		color: #fff;
-		font-size: 11px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.timestamp {
-		color: #555;
-		font-size: 10px;
-		flex-shrink: 0;
-	}
-
-	.desc {
-		color: #888;
-		font-size: 11px;
-	}
-
-	.whale-row {
-		display: flex;
-		align-items: center;
-		gap: 6px;
+		gap: 16px;
+		margin: 0 0 14px 0;
+		padding: 0 18px;
 		flex-wrap: wrap;
 	}
-
-	.whale-row.secondary {
-		color: #666;
-		font-size: 10px;
-		justify-content: space-between;
-	}
-
-	.whale-row.secondary strong {
-		color: #aaa;
-	}
-
-	.tag {
-		font-size: 10px;
-		font-weight: bold;
-		padding: 1px 6px;
-		border-radius: 3px;
-		text-transform: uppercase;
-	}
-
-	.tag.yes { background: #003d1a; color: #00ff64; }
-	.tag.no  { background: #3d0000; color: #ff4444; }
-	.tag.side { background: #1a1a00; color: #ff9500; }
-
-	.amount {
-		font-size: 13px;
-		font-weight: bold;
+	.title {
+		font-size: 26px;
+		font-weight: 800;
 		color: #fff;
-		margin-left: auto;
+		letter-spacing: -0.02em;
+		margin-top: 4px;
+	}
+
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 14px;
+		align-items: stretch;
+		padding: 0;
+	}
+
+	.panel {
+		border: 1px solid #333;
+		border-radius: 0;
+		background: #0a0a0a;
+		overflow: hidden;
+		height: 320px;
+		max-height: 320px;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.panel.col-first {
+		border-left: 0;
+	}
+	.panel.col-last {
+		border-right: 0;
+	}
+
+	.panel-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 14px;
+		background: #000;
+		border-bottom: 1px solid #222;
+		flex-shrink: 0;
+	}
+	.ph-title {
+		font-family: 'Courier New', monospace;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: 0.18em;
+		color: #ff9500;
+	}
+	.ph-meta {
+		font-family: 'Courier New', monospace;
+		font-size: 11px;
+		color: #c4c4c4;
+	}
+
+	.panel-body {
+		padding: 10px 12px;
+		flex: 1;
+		min-height: 0;
+	}
+	.scroll {
+		overflow-y: auto;
+		min-height: 0;
+		flex: 1;
+	}
+
+	.state {
+		color: #c4c4c4;
+		font-family: 'Courier New', monospace;
+		font-size: 12px;
+		padding: 12px 4px;
+	}
+
+	.item {
+		width: 100%;
+		text-align: left;
+		background: transparent;
+		border: 1px solid #1b1b1b;
+		border-radius: 8px;
+		padding: 8px 10px;
+		margin-bottom: 8px;
+	}
+	.item:last-child {
+		margin-bottom: 0;
+	}
+
+	/* Match NewsDiscoveryPanel reader: .rmeta + .badge / .badge.dim */
+	.rmeta {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+		align-items: center;
+		margin-bottom: 8px;
+	}
+	.rmeta.tail {
+		margin-bottom: 0;
+		margin-top: 8px;
+	}
+
+	.badge {
+		font-family: 'Courier New', monospace;
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		color: #ff9500;
+		border: 1px solid rgba(255, 149, 0, 0.35);
+		background: rgba(255, 149, 0, 0.08);
+		padding: 4px 8px;
+		border-radius: 999px;
+	}
+	.badge.dim {
+		color: #e0e0e0;
+		border-color: #555;
+		background: rgba(255, 255, 255, 0.06);
+		font-weight: 700;
+	}
+	.badge-up {
+		color: #00ff66;
+		border-color: rgba(0, 255, 102, 0.45);
+		background: rgba(0, 255, 102, 0.1);
+	}
+	.badge-down {
+		color: #ff6b6b;
+		border-color: rgba(255, 107, 107, 0.45);
+		background: rgba(255, 107, 107, 0.1);
+	}
+
+	.it-title {
+		color: #fff;
+		font-size: 13px;
+		line-height: 1.45;
+		font-weight: 600;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.body {
+		color: #bdbdbd;
+		font-size: 13px;
+		line-height: 1.65;
+		margin: 8px 0 0;
+	}
+
+	@media (max-width: 1100px) {
+		.grid {
+			grid-template-columns: 1fr;
+		}
+		.panel {
+			height: 260px;
+			max-height: 260px;
+			border-left: 1px solid #333;
+			border-right: 1px solid #333;
+		}
+		.panel.col-first,
+		.panel.col-last {
+			border-left: 1px solid #333;
+			border-right: 1px solid #333;
+		}
 	}
 </style>
