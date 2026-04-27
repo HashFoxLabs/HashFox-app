@@ -229,7 +229,7 @@
 		margin-bottom: 14px;
 	}
 	.m-cat { color: #888; font-size: 10px; letter-spacing: 0.1em; }
-	.m-sym { color: #ff9500; font-size: 20px; font-weight: bold; margin-left: 8px; }
+	.m-sym { color: #ff5a00; font-size: 20px; font-weight: bold; margin-left: 8px; }
 	.m-label { color: #666; font-size: 11px; margin-left: 6px; }
 	.p-value { color: #00ff00; font-size: 18px; font-weight: bold; }
 	.p-stream { color: #888; font-size: 9px; letter-spacing: 0.08em; margin-left: 8px; }
@@ -248,7 +248,7 @@
 		cursor: pointer;
 		letter-spacing: 0.06em;
 	}
-	.tab.active { color: #ff9500; border-color: #ff9500; }
+	.tab.active { color: #ff5a00; border-color: #ff5a00; }
 	.tab:disabled { opacity: 0.4; cursor: not-allowed; }
 
 	.dir {
@@ -286,7 +286,7 @@
 		font-size: 12px;
 		outline: none;
 	}
-	.field input:focus { border-color: #ff9500; }
+	.field input:focus { border-color: #ff5a00; }
 
 	.field-row { display: flex; gap: 10px; }
 
@@ -300,7 +300,7 @@
 		font-size: 11px;
 		cursor: pointer;
 	}
-	.lev.active { color: #ff9500; border-color: #ff9500; }
+	.lev.active { color: #ff5a00; border-color: #ff5a00; }
 
 	.submit {
 		width: 100%;

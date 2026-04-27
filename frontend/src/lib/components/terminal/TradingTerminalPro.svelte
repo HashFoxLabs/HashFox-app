@@ -4,13 +4,18 @@
 	import { walletStore } from '$lib/wallet/stores';
 	import { pythPrices } from '$lib/stores/pythPrices';
 	import { sessionKey } from '$lib/stores/sessionKey';
+	import { setUserBalance, clearUserBalance } from '$lib/stores/userBalance';
 	import { selectedMarket } from '$lib/stores/selectedMarket';
 	import { hashfoxClient } from '$lib/hashfoxClient';
+	import { sessionKeyManager } from '$lib/solana/session-keys';
 	import {
 		buildConnection,
 		buildProgram,
+		buildKeypairProgram,
 		openMarketPosition,
 		openLimitOrder,
+		closeTradingPosition as closeTradingPositionRpc,
+		cancelLimitOrder as cancelLimitOrderRpc,
 		initializeUserAccount,
 		getUserAccount,
 		decodeBalance,
@@ -43,6 +48,14 @@
 		connectSynthetic,
 		disconnectSynthetic
 	} from '$lib/stores/syntheticOrderbook';
+	import {
+		stocksOrderBook,
+		stocksTrades,
+		stocksStatus,
+		stocksUnconfigured,
+		connectStocks,
+		disconnectStocks
+	} from '$lib/stores/stocksOrderbook';
 
 	/** Which category this terminal serves. */
 	export let category: MarketCategory = 'crypto';
@@ -63,6 +76,15 @@
 
 	const isCrypto = category === 'crypto';
 
+	/** Resolve which orderbook source a market uses. */
+	type BookSource = 'binance' | 'stocks' | 'synthetic';
+	function bookSourceFor(m: MarketEntry | undefined): BookSource {
+		if (!m) return 'synthetic';
+		if (m.sub === 'crypto') return 'binance';
+		if (m.sub === 'stock' || m.sub === 'equity') return 'stocks';
+		return 'synthetic';
+	}
+
 	/** Map traditional-market symbols to TradingView identifiers. */
 	const TV_SYMBOLS: Record<string, string> = {
 		AAPL: 'NASDAQ:AAPL', TSLA: 'NASDAQ:TSLA', NVDA: 'NASDAQ:NVDA',
@@ -79,7 +101,9 @@
 		return TV_SYMBOLS[m.symbol] ?? m.symbol;
 	}
 
-	let chartView: 'tradingview' | 'pyth' = 'tradingview';
+	// Default the chart to Pyth Live for traditional markets — the chart now
+	// bootstraps history from Pyth Benchmarks so it works for stocks/forex/metals.
+	let chartView: 'tradingview' | 'pyth' = isCrypto ? 'tradingview' : 'pyth';
 	let orderBookColumn: 'book' | 'trades' = 'book';
 	let orderBookData: OrderBookData = { asks: [], bids: [], spreadAbs: 0, spreadPct: 0 };
 	let liveTrades: TradeRow[] = [];
@@ -116,24 +140,53 @@
 	$: spreadConf = prices[market?.symbol]?.spread ?? 0;
 	$: publishTime = prices[market?.symbol]?.publishTime ?? 0;
 
-	/* Market orderbook wiring */
-	function wireOrderbook(sym: string) {
+	/* Market orderbook wiring — pick source per sub-category. */
+	let activeBookSource: BookSource = 'synthetic';
+	function wireOrderbook(m: MarketEntry | undefined) {
+		const sym = m?.symbol;
 		if (!sym) return;
-		if (isCrypto) {
-			disconnectSynthetic();
-			connectBinance(sym);
-		} else {
-			disconnectBinance();
-			connectSynthetic(sym);
-		}
+		const next = bookSourceFor(m);
+		// Tear down all sources we're not using.
+		if (next !== 'binance') disconnectBinance();
+		if (next !== 'stocks') disconnectStocks();
+		if (next !== 'synthetic') disconnectSynthetic();
+		activeBookSource = next;
+		if (next === 'binance') connectBinance(sym);
+		else if (next === 'stocks') connectStocks(sym);
+		else connectSynthetic(sym);
 	}
 
-	$: if (market?.symbol) wireOrderbook(market.symbol);
+	$: if (market?.symbol) wireOrderbook(market);
 
-	/* Subscribe to the right orderbook store per category */
-	$: bookStore = isCrypto ? binanceOrderBook : syntheticOrderBook;
-	$: tradesStore = isCrypto ? binanceTrades : syntheticTrades;
-	$: statusStore = isCrypto ? binanceStatus : syntheticStatus;
+	// If the server reports that Alpaca isn't configured, fall back to the
+	// synthetic book for stocks so the panel still renders something useful.
+	stocksUnconfigured.subscribe((unconfigured) => {
+		if (unconfigured && activeBookSource === 'stocks' && market?.symbol) {
+			disconnectStocks();
+			activeBookSource = 'synthetic';
+			connectSynthetic(market.symbol);
+		}
+	});
+
+	/* Subscribe to the right orderbook store per active source. */
+	$: bookStore =
+		activeBookSource === 'binance'
+			? binanceOrderBook
+			: activeBookSource === 'stocks'
+				? stocksOrderBook
+				: syntheticOrderBook;
+	$: tradesStore =
+		activeBookSource === 'binance'
+			? binanceTrades
+			: activeBookSource === 'stocks'
+				? stocksTrades
+				: syntheticTrades;
+	$: statusStore =
+		activeBookSource === 'binance'
+			? binanceStatus
+			: activeBookSource === 'stocks'
+				? stocksStatus
+				: syntheticStatus;
 
 	let unsubBook: (() => void) | null = null;
 	let unsubTrades: (() => void) | null = null;
@@ -218,12 +271,57 @@
 		return program;
 	}
 
+	/** Build the program + tx signer for trade execution. When the fast-trade
+	 *  session is active, sign locally with the session keypair so the wallet
+	 *  popup is skipped. The on-chain authority (PDA derivation) stays the
+	 *  wallet pubkey. */
+	function buildTradeRuntime(): { program: any; signer: import('@solana/web3.js').PublicKey; sessionToken: import('@solana/web3.js').PublicKey | null } {
+		const conn = buildConnection();
+		const sessionActive =
+			session.active &&
+			sessionKeyManager.isSessionActive() &&
+			sessionKeyManager.isSessionForWallet(wallet.publicKey);
+		if (sessionActive) {
+			const kp = sessionKeyManager.getSessionKeypair();
+			const tokenPda = sessionKeyManager.getSessionTokenPDA();
+			if (kp && tokenPda) {
+				return {
+					program: buildKeypairProgram(conn, kp),
+					signer: kp.publicKey,
+					sessionToken: tokenPda
+				};
+			}
+		}
+		return {
+			program: buildProgram(conn, wallet.adapter),
+			signer: wallet.publicKey,
+			sessionToken: null
+		};
+	}
+
 	async function submitOrder() {
 		if (busy) return;
 		if (!wallet?.connected) {
 			statusMessage = 'Connect a wallet first.';
 			return;
 		}
+
+		// Spot sell: you can only sell what you actually hold. Route a market
+		// sell to close the matching long spot position(s) instead of opening a
+		// new short, and block the action entirely when there are no holdings.
+		if (tradeSurface === 'spot' && tradeSide === 'sell') {
+			if (currentSymbolHoldings.length === 0) {
+				statusMessage = `You don't own ${market.symbol} to sell.`;
+				return;
+			}
+			if (tradingTabUI === 'spot') {
+				await executeSpotSell();
+				return;
+			}
+			// Limit sell falls through to the standard flow below — the user owns
+			// the asset, so placing a limit short order is at least permitted.
+		}
+
 		const notional = notionalFromSizeInput();
 		if (notional <= 0) {
 			statusMessage = 'Enter a valid size.';
@@ -242,13 +340,13 @@
 		busy = true;
 		statusMessage = 'Submitting order…';
 		try {
-			const program = await ensureAccount();
+			await ensureAccount();
+			const { program, signer, sessionToken } = buildTradeRuntime();
 			const direction = tradeSide === 'buy' ? 'long' : 'short';
 			const tp =
 				takeProfit && parseFloat(takeProfit) > 0 ? priceScaled(parseFloat(takeProfit)) : new BN(0);
 			const sl =
 				stopLoss && parseFloat(stopLoss) > 0 ? priceScaled(parseFloat(stopLoss)) : new BN(0);
-			const sessionToken = session.active ? session.token : null;
 			const marginUsd = usd(requiredMargin);
 
 			let sig = '';
@@ -263,7 +361,8 @@
 					limitPrice: priceScaled(parseFloat(limitPriceInput)),
 					takeProfitPrice: tp,
 					stopLossPrice: sl,
-					sessionToken
+					sessionToken,
+					signer
 				});
 			} else {
 				sig = await openMarketPosition(program, wallet.publicKey, {
@@ -276,7 +375,8 @@
 					takeProfitPrice: tp,
 					stopLossPrice: sl,
 					entryPrice: priceScaled(currentPrice),
-					sessionToken
+					sessionToken,
+					signer
 				});
 			}
 			statusMessage = `Order submitted · ${sig.slice(0, 8)}…`;
@@ -294,16 +394,83 @@
 		}
 	}
 
+	/** Sell the user's full spot holding of the active market. The on-chain
+	 *  program only supports full position closes, so partial sells are not
+	 *  permitted here — every matching long position is closed at market. */
+	async function executeSpotSell() {
+		if (busy) return;
+		const totalQty = currentSymbolHoldings.reduce((s, h) => s + h.qty, 0);
+		if (totalQty <= 0) {
+			statusMessage = `You don't own ${market.symbol} to sell.`;
+			return;
+		}
+
+		const px = prices[market.symbol]?.price ?? currentPrice;
+		if (!px || px <= 0) {
+			statusMessage = 'Waiting for a price feed…';
+			return;
+		}
+
+		busy = true;
+		statusMessage = 'Selling…';
+		try {
+			await ensureAccount();
+			const { program, signer, sessionToken } = buildTradeRuntime();
+			for (const h of currentSymbolHoldings) {
+				const pos = positions.find((p) => p.pubkey === h.pubkey);
+				if (!pos) continue;
+				await closeTradingPositionRpc(
+					program,
+					wallet.publicKey,
+					new BN(pos.positionId),
+					priceScaled(px),
+					sessionToken,
+					signer
+				);
+			}
+			statusMessage = `Sold ${totalQty.toFixed(market.decimals)} ${market.symbol} @ $${px.toFixed(2)}`;
+			tradeSize = '';
+			selectedPercentage = 0;
+			await refreshAccount();
+		} catch (err: any) {
+			console.error(err);
+			statusMessage = err?.message ?? 'Sell failed.';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function sellHolding(h: { pubkey: string; positionId: number; pairSymbol: string; currentPrice: number }) {
+		if (closingPubkey) return;
+		const pos = positions.find((p) => p.pubkey === h.pubkey);
+		if (!pos) return;
+		await closePosition(pos);
+	}
+
 	async function closePosition(pos: EnrichedTradingPosition) {
 		if (closingPubkey) return;
 		closingPubkey = pos.pubkey;
 		try {
+			const { program, signer, sessionToken } = buildTradeRuntime();
 			if (pos.status === 'pending') {
-				await hashfoxClient.cancelLimitOrder(pos.positionId);
+				await cancelLimitOrderRpc(
+					program,
+					wallet.publicKey,
+					new BN(pos.positionId),
+					sessionToken,
+					signer
+				);
 				statusMessage = `Cancelled #${pos.positionId}`;
 			} else {
 				const px = prices[pos.pairSymbol]?.price ?? currentPrice;
-				await hashfoxClient.closeTradingPosition(pos.positionId, px);
+				await closeTradingPositionRpc(
+					program,
+					wallet.publicKey,
+					new BN(pos.positionId),
+					priceScaled(px),
+					sessionToken,
+					signer
+				);
 				statusMessage = `Closed #${pos.positionId} at $${px.toFixed(2)}`;
 			}
 			await refreshAccount();
@@ -318,6 +485,7 @@
 	async function refreshAccount() {
 		if (!wallet?.connected) {
 			balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
+			clearUserBalance();
 			positions = [];
 			accountInitialized = false;
 			return;
@@ -327,9 +495,11 @@
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
 				balance = await hashfoxClient.getBalanceBreakdown();
+				setUserBalance(balance);
 				positions = await hashfoxClient.fetchTradingPositions();
 			} else {
 				balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
+				clearUserBalance();
 				positions = [];
 			}
 		} catch (err) {
@@ -337,12 +507,76 @@
 		}
 	}
 
-	/* positions filtered to this category */
+	/* All open or pending positions for this category. Used to derive
+	 * holdings (active spot) and open orders (perps + pending limits). */
 	$: visiblePositions = positions.filter((p) => {
 		if (p.status !== 'active' && p.status !== 'pending') return false;
 		if (category === 'crypto') return p.marketCategory === 'crypto';
 		return ['stock', 'forex', 'metal', 'equity'].includes(p.marketCategory);
 	});
+
+	/* Open Orders panel: only perps + pending limits (active spot belongs in
+	 * the Balance tab as a held asset, not as an order). */
+	$: ordersList = visiblePositions.filter(
+		(p) => p.tradeMode === 'perp' || p.status === 'pending'
+	);
+
+	/** Active spot positions in this category, grouped by asset.
+	 *  Each spot fill is essentially "you bought X tokens" — surface this in the
+	 *  Balance tab so users can see their holdings under the chart. */
+	type SpotHolding = {
+		pubkey: string;
+		positionId: number;
+		pairSymbol: string;
+		symbol: string;
+		side: 'long' | 'short';
+		qty: number;
+		entryPrice: number;
+		costUsd: number;
+		currentPrice: number;
+		valueUsd: number;
+		unrealizedPnl: number;
+	};
+	$: spotHoldings = (() => {
+		const out: SpotHolding[] = [];
+		for (const p of visiblePositions) {
+			if (p.tradeMode !== 'spot' || p.status !== 'active') continue;
+			if (!p.entryPrice || p.entryPrice <= 0) continue;
+			const qty = p.sizeUsd / p.entryPrice;
+			const currentPrice = prices[p.pairSymbol]?.price ?? 0;
+			const valueUsd = currentPrice > 0 ? qty * currentPrice : p.sizeUsd;
+			const upnl =
+				currentPrice > 0
+					? p.direction === 'long'
+						? (currentPrice - p.entryPrice) * qty
+						: (p.entryPrice - currentPrice) * qty
+					: 0;
+			out.push({
+				pubkey: p.pubkey,
+				positionId: p.positionId,
+				pairSymbol: p.pairSymbol,
+				symbol: p.pairSymbol,
+				side: p.direction,
+				qty,
+				entryPrice: p.entryPrice,
+				costUsd: p.sizeUsd,
+				currentPrice,
+				valueUsd,
+				unrealizedPnl: upnl
+			});
+		}
+		return out;
+	})();
+
+	/** Long spot holdings of the currently displayed market — what the Sell
+	 *  button actually has available to dispose of. */
+	$: currentSymbolHoldings = spotHoldings.filter(
+		(h) => h.symbol === market.symbol && h.side === 'long'
+	);
+	$: ownedQty = currentSymbolHoldings.reduce((s, h) => s + h.qty, 0);
+	$: isSpotSell = tradeSurface === 'spot' && tradeSide === 'sell';
+	$: isSpotMarketSell = tradingTabUI === 'spot' && tradeSide === 'sell';
+	$: sellBlocked = isSpotSell && currentSymbolHoldings.length === 0;
 
 	$: unrealizedPnl = (() => {
 		let sum = 0;
@@ -358,8 +592,31 @@
 		return sum;
 	})();
 
+	/** Re-interpret on-chain `locked_margin_usd` for display:
+	 * the program locks USDT for both spot and perp (and for pending limit
+	 * orders), but to the user a spot buy is "I now hold the asset" and only
+	 * perp margin should appear as Locked. Both totals include pending limit
+	 * orders so cash + spot + perp = on-chain total. */
+	$: perpLockedUsd = positions
+		.filter(
+			(p) =>
+				p.tradeMode === 'perp' && (p.status === 'active' || p.status === 'pending')
+		)
+		.reduce((s, p) => s + p.marginUsd, 0);
+	$: spotCostUsd = positions
+		.filter(
+			(p) =>
+				p.tradeMode === 'spot' && (p.status === 'active' || p.status === 'pending')
+		)
+		.reduce((s, p) => s + p.marginUsd, 0);
+	/** Live mark value of all spot holdings (this category only — used for the chart's holdings card). */
+	$: spotValueUsd = spotHoldings.reduce((s, h) => s + h.valueUsd, 0);
+	/** "Cash USDT" the user can spend right now. The on-chain `availableUsd`
+	 * already subtracts both spot and perp locks; that is the cash. */
+	$: cashUsd = balance.availableUsd;
+
 	onMount(() => {
-		wireOrderbook(market?.symbol);
+		wireOrderbook(market);
 		void refreshAccount();
 		statusPoll = setInterval(() => {
 			if (wallet?.connected) void refreshAccount();
@@ -372,6 +629,7 @@
 		if (unsubTrades) unsubTrades();
 		if (unsubStatus) unsubStatus();
 		disconnectBinance();
+		disconnectStocks();
 		disconnectSynthetic();
 	});
 
@@ -403,16 +661,18 @@
 		<div class="balance-strip">
 			<div class="bs-cell">
 				<span class="bs-label">USDT</span>
-				<span class="bs-value bs-usdt">{fmtUsd(balance.totalUsd)}</span>
+				<span class="bs-value bs-usdt">{fmtUsd(cashUsd)}</span>
 			</div>
+			{#if spotValueUsd > 0}
+				<div class="bs-cell">
+					<span class="bs-label">Spot value</span>
+					<span class="bs-value bs-avail">{fmtUsd(spotValueUsd)}</span>
+				</div>
+			{/if}
 			<div class="bs-cell">
-				<span class="bs-label">Available</span>
-				<span class="bs-value bs-avail">{fmtUsd(balance.availableUsd)}</span>
-			</div>
-			<div class="bs-cell">
-				<span class="bs-label">Locked</span>
-				<span class="bs-value bs-lock" class:is-lock={balance.lockedUsd > 0}>
-					{fmtUsd(balance.lockedUsd)}
+				<span class="bs-label">Perp lock</span>
+				<span class="bs-value bs-lock" class:is-lock={perpLockedUsd > 0}>
+					{fmtUsd(perpLockedUsd)}
 				</span>
 			</div>
 		</div>
@@ -486,7 +746,13 @@
 		<div class="panel orderbook-panel">
 			<div class="ob-top">
 				<span class="ob-title">{market.symbol}/{isCrypto ? 'USDT' : market.quote}</span>
-				<span class="ob-status" class:sim={!isCrypto}>{bookStatus}</span>
+				<span
+					class="ob-status"
+					class:sim={activeBookSource === 'synthetic'}
+					class:l1={activeBookSource === 'stocks'}
+				>
+					{#if activeBookSource === 'stocks'}L1 · {/if}{bookStatus}
+				</span>
 			</div>
 			<div class="ob-tabs">
 				<button
@@ -627,28 +893,39 @@
 					{/if}
 
 					<p class="hl-available">
-						Available to trade:
-						<strong>{fmtUsd(balance.availableUsd)} USDT</strong>
+						{#if isSpotSell}
+							You own:
+							<strong
+								>{ownedQty.toFixed(market.decimals)} {market.symbol}{currentPrice > 0
+									? ` (≈ ${fmtUsd(ownedQty * currentPrice)} USDT)`
+									: ''}</strong
+							>
+						{:else}
+							Available to trade:
+							<strong>{fmtUsd(balance.availableUsd)} USDT</strong>
+						{/if}
 					</p>
 
-					<div class="hl-size-block">
-						<span class="hl-label">Size</span>
-						<div class="hl-size-input-row">
-							<input
-								type="number"
-								class="hl-input"
-								bind:value={tradeSize}
-								placeholder="0.00"
-								step="0.01"
-							/>
-							<select class="hl-unit-select" bind:value={sizeDenom}>
-								<option value="USDT">USDT</option>
-								<option value="BASE">{market.symbol}</option>
-							</select>
+					{#if !isSpotMarketSell}
+						<div class="hl-size-block">
+							<span class="hl-label">Size</span>
+							<div class="hl-size-input-row">
+								<input
+									type="number"
+									class="hl-input"
+									bind:value={tradeSize}
+									placeholder="0.00"
+									step="0.01"
+								/>
+								<select class="hl-unit-select" bind:value={sizeDenom}>
+									<option value="USDT">USDT</option>
+									<option value="BASE">{market.symbol}</option>
+								</select>
+							</div>
 						</div>
-					</div>
+					{/if}
 
-					{#if tradingTabUI !== 'perps'}
+					{#if tradingTabUI !== 'perps' && !isSpotMarketSell}
 						<div class="hl-pct-row">
 							{#each [25, 50, 75] as pct}
 								<button
@@ -716,13 +993,18 @@
 						class="hl-submit"
 						class:hl-submit-buy={tradeSide === 'buy'}
 						class:hl-submit-sell={tradeSide === 'sell'}
-						disabled={busy || !wallet?.connected || !tradeSize || notionalFromSizeInput() <= 0}
+						disabled={busy ||
+							!wallet?.connected ||
+							sellBlocked ||
+							(!isSpotMarketSell && (!tradeSize || notionalFromSizeInput() <= 0))}
 						on:click={submitOrder}
 					>
 						{#if busy}
 							Submitting…
 						{:else if !wallet?.connected}
 							Connect wallet
+						{:else if sellBlocked}
+							You don't own {market.symbol}
 						{:else if tradingTabUI === 'perps'}
 							{tradeSide === 'buy' ? 'Long' : 'Short'}
 							{market.symbol} @ {currentPrice > 0 ? '$' + fmtPrice(currentPrice) : '…'}
@@ -730,9 +1012,12 @@
 							{@const limPx = parseFloat(limitPriceInput || '0')}
 							{tradeSide === 'buy' ? 'Buy' : 'Sell'}
 							{market.symbol} limit @ ${limPx > 0 ? fmtPrice(limPx) : '…'}
+						{:else if isSpotMarketSell}
+							Sell {ownedQty.toFixed(market.decimals)} {market.symbol} @ {currentPrice > 0
+								? '$' + fmtPrice(currentPrice)
+								: '…'}
 						{:else}
-							{tradeSide === 'buy' ? 'Buy' : 'Sell'}
-							{market.symbol} @ {currentPrice > 0 ? '$' + fmtPrice(currentPrice) : '…'}
+							Buy {market.symbol} @ {currentPrice > 0 ? '$' + fmtPrice(currentPrice) : '…'}
 						{/if}
 					</button>
 					{#if statusMessage}
@@ -759,7 +1044,7 @@
 								class="dock-tab-btn"
 								class:dock-tab-active={positionsDockTab === 'orders'}
 								on:click={() => (positionsDockTab = 'orders')}
-								>Open Orders {visiblePositions.length > 0 ? `(${visiblePositions.length})` : ''}</button
+								>Open Orders {ordersList.length > 0 ? `(${ordersList.length})` : ''}</button
 							>
 							{#if unrealizedPnl !== 0}
 								<span
@@ -783,13 +1068,13 @@
 					</div>
 
 					{#if positionsDockTab === 'orders'}
-						{#if visiblePositions.length === 0}
+						{#if ordersList.length === 0}
 							<div class="chart-positions-empty">
-								No open or pending positions. Submit a trade to see it here.
+								No open perp positions or pending limit orders.
 							</div>
 						{:else}
 							<div class="chart-positions-list">
-								{#each visiblePositions as p (p.pubkey)}
+								{#each ordersList as p (p.pubkey)}
 									{@const markPx = prices[p.pairSymbol]?.price ?? 0}
 									{@const rawPnl =
 										p.status === 'active' && markPx > 0 && p.entryPrice > 0
@@ -838,7 +1123,7 @@
 											>
 										</div>
 										<div class="cp-block">
-											<span class="cp-block-label">Mark</span>
+											<span class="cp-block-label">Current</span>
 											<span class="cp-block-value"
 												>{markPx > 0 ? '$' + fmtPrice(markPx) : '—'}</span
 											>
@@ -854,6 +1139,17 @@
 											<span class="cp-block-value"
 												>{p.stopLossPrice > 0 ? '$' + p.stopLossPrice.toFixed(2) : '—'}</span
 											>
+										</div>
+										<div class="cp-block">
+											<span class="cp-block-label">Liq</span>
+											<span
+												class="cp-block-value"
+												class:cp-liq-warn={p.tradeMode === 'perp' && p.liquidationPrice > 0}
+											>
+												{p.tradeMode === 'perp' && p.liquidationPrice > 0
+													? '$' + fmtPrice(p.liquidationPrice)
+													: '—'}
+											</span>
 										</div>
 										<div class="cp-block">
 											<span class="cp-block-label">uPnL</span>
@@ -906,19 +1202,18 @@
 											<span class="bal-block-value bal-asset-name">USDT</span>
 										</div>
 										<div class="bal-block">
-											<span class="bal-block-label">Total</span>
-											<span class="bal-block-value">{fmtUsd(balance.totalUsd)}</span>
+											<span class="bal-block-label">Cash</span>
+											<span class="bal-block-value bal-green">{fmtUsd(cashUsd)}</span>
 										</div>
 										<div class="bal-block">
-											<span class="bal-block-label">Available</span>
-											<span class="bal-block-value bal-green">{fmtUsd(balance.availableUsd)}</span>
+											<span class="bal-block-label">Spot cost</span>
+											<span class="bal-block-value">{fmtUsd(spotCostUsd)}</span>
 										</div>
 										<div class="bal-block">
-											<span class="bal-block-label">Locked</span>
+											<span class="bal-block-label">Perp lock</span>
 											<span
 												class="bal-block-value"
-												class:bal-orange={balance.lockedUsd > 0.01}
-												>{fmtUsd(balance.lockedUsd)}</span
+												class:bal-orange={perpLockedUsd > 0.01}>{fmtUsd(perpLockedUsd)}</span
 											>
 										</div>
 										<div class="bal-block">
@@ -927,6 +1222,60 @@
 										</div>
 									</div>
 								</div>
+
+								{#if spotHoldings.length > 0}
+									<div class="holdings-section">
+										<div class="holdings-title">
+											{category === 'crypto' ? 'CRYPTO' : 'TRADITIONAL'} HOLDINGS
+											<span class="holdings-sub">({spotHoldings.length})</span>
+										</div>
+										<div class="holdings-head">
+											<span>Asset</span>
+											<span>Side</span>
+											<span class="hd-num">Qty</span>
+											<span class="hd-num">Avg entry</span>
+											<span class="hd-num">Current</span>
+											<span class="hd-num">Cost</span>
+											<span class="hd-num">Value</span>
+											<span class="hd-num">uPnL</span>
+											<span class="hd-action-hdr">&nbsp;</span>
+										</div>
+										{#each spotHoldings as h (h.pubkey)}
+											<div class="holdings-row">
+												<span class="hr-asset">{h.symbol}</span>
+												<span
+													class="hr-side"
+													class:hr-side-long={h.side === 'long'}
+													class:hr-side-short={h.side === 'short'}
+												>
+													{h.side === 'long' ? 'BUY' : 'SELL'}
+												</span>
+												<span class="hd-num">{h.qty.toFixed(6)}</span>
+												<span class="hd-num">${fmtPrice(h.entryPrice)}</span>
+												<span class="hd-num"
+													>{h.currentPrice > 0 ? '$' + fmtPrice(h.currentPrice) : '—'}</span
+												>
+												<span class="hd-num">${fmtUsd(h.costUsd)}</span>
+												<span class="hd-num">${fmtUsd(h.valueUsd)}</span>
+												<span
+													class="hd-num"
+													class:pnl-pos={h.unrealizedPnl > 0}
+													class:pnl-neg={h.unrealizedPnl < 0}
+												>
+													{h.unrealizedPnl >= 0 ? '+' : ''}{h.unrealizedPnl.toFixed(2)}
+												</span>
+												<button
+													type="button"
+													class="hr-sell"
+													disabled={closingPubkey === h.pubkey || h.currentPrice <= 0}
+													on:click={() => sellHolding(h)}
+												>
+													{closingPubkey === h.pubkey ? '…' : 'Sell'}
+												</button>
+											</div>
+										{/each}
+									</div>
+								{/if}
 							</div>
 						{:else}
 							<p class="dock-hint">Initialize your paper account from the top bar to trade.</p>
@@ -967,7 +1316,7 @@
 	}
 	.market-line::-webkit-scrollbar { display: none; }
 	.ml-sym {
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 14px;
 		font-weight: 800;
 		letter-spacing: 0.06em;
@@ -985,7 +1334,7 @@
 		padding: 2px 6px;
 		border-radius: 4px;
 	}
-	.ml-cat-crypto { background: rgba(255, 149, 0, 0.15); color: #ff9500; }
+	.ml-cat-crypto { background: rgba(255, 90, 0, 0.15); color: #ff5a00; }
 	.ml-cat-stock { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
 	.ml-cat-forex { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 	.ml-cat-metal { background: rgba(234, 179, 8, 0.15); color: #fde047; }
@@ -1031,7 +1380,7 @@
 		font-weight: 900;
 	}
 	.bs-value { color: #e8e8e8; font-size: 13px; font-weight: 900; }
-	.bs-usdt { color: #ff9500; }
+	.bs-usdt { color: #ff5a00; }
 	.bs-avail { color: #00ff64; }
 	.bs-lock.is-lock { color: #ffb84d; }
 
@@ -1065,7 +1414,7 @@
 		gap: 8px;
 	}
 	.chart-header-left { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-	.chart-title { color: #ff9500; font-weight: 900; letter-spacing: 0.1em; font-size: 13px; }
+	.chart-title { color: #ff5a00; font-weight: 900; letter-spacing: 0.1em; font-size: 13px; }
 	.chart-view-toggle { display: flex; gap: 4px; }
 	.cv-btn {
 		background: #000;
@@ -1079,7 +1428,7 @@
 		font-weight: 900;
 	}
 	.cv-btn:hover { color: #ccc; border-color: #444; }
-	.cv-btn.cv-active { color: #ff9500; border-color: #ff9500; background: rgba(255, 149, 0, 0.06); }
+	.cv-btn.cv-active { color: #ff5a00; border-color: #ff5a00; background: rgba(255, 90, 0, 0.06); }
 
 	.chart-stats { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 	.stat-box {
@@ -1094,7 +1443,7 @@
 	}
 	.stat-label { color: #666; font-size: 8px; letter-spacing: 0.12em; font-weight: 900; }
 	.stat-value { color: #e8e8e8; font-size: 11px; font-weight: 900; }
-	.price-value { color: #ff9500; }
+	.price-value { color: #ff5a00; }
 	.ema-value { color: #6aa9ff; }
 	.conf-value { color: #eaecef; }
 	.fresh-value { color: #00c076; }
@@ -1133,6 +1482,7 @@
 		letter-spacing: 0.1em;
 	}
 	.ob-status.sim { color: #ffb84d; }
+	.ob-status.l1 { color: #60a5fa; }
 	.ob-tabs { display: flex; border-bottom: 1px solid #1a1a1a; }
 	.ob-tab {
 		flex: 1;
@@ -1145,7 +1495,7 @@
 		font-family: inherit;
 		letter-spacing: 0.08em;
 	}
-	.ob-tab.active { color: #ff9500; border-bottom: 2px solid #ff9500; }
+	.ob-tab.active { color: #ff5a00; border-bottom: 2px solid #ff5a00; }
 	.ob-body { flex: 1; display: flex; flex-direction: column; min-height: 0; font-size: 10px; }
 	.ob-col-hdr {
 		display: grid;
@@ -1241,7 +1591,7 @@
 		letter-spacing: 0.08em;
 		cursor: pointer;
 	}
-	.hl-ot.active { color: #ff9500; border-color: #ff9500; background: rgba(255, 149, 0, 0.05); }
+	.hl-ot.active { color: #ff5a00; border-color: #ff5a00; background: rgba(255, 90, 0, 0.05); }
 	.hl-ot:disabled { opacity: 0.35; cursor: not-allowed; }
 
 	.hl-buy-sell { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -1290,7 +1640,7 @@
 		width: 100%;
 		box-sizing: border-box;
 	}
-	.hl-input:focus { border-color: #ff9500; }
+	.hl-input:focus { border-color: #ff5a00; }
 
 	.hl-size-block { display: flex; flex-direction: column; gap: 4px; }
 	.hl-size-input-row { display: grid; grid-template-columns: 1fr 80px; gap: 4px; }
@@ -1316,7 +1666,7 @@
 		cursor: pointer;
 	}
 	.hl-pct-btn:hover { border-color: #444; color: #ccc; }
-	.hl-pct-active { color: #ff9500; border-color: #ff9500; background: rgba(255, 149, 0, 0.06); }
+	.hl-pct-active { color: #ff5a00; border-color: #ff5a00; background: rgba(255, 90, 0, 0.06); }
 
 	.hl-lev-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 	.hl-lev-btn {
@@ -1329,7 +1679,7 @@
 		font-weight: 900;
 		cursor: pointer;
 	}
-	.hl-lev-btn.active { color: #ff9500; border-color: #ff9500; background: rgba(255, 149, 0, 0.06); }
+	.hl-lev-btn.active { color: #ff5a00; border-color: #ff5a00; background: rgba(255, 90, 0, 0.06); }
 
 	.hl-trading-footer {
 		border-top: 1px solid #1a1a1a;
@@ -1409,7 +1759,7 @@
 		letter-spacing: 0.08em;
 		cursor: pointer;
 	}
-	.dock-tab-active { color: #ff9500; border-color: #ff9500; background: rgba(255, 149, 0, 0.06); }
+	.dock-tab-active { color: #ff5a00; border-color: #ff5a00; background: rgba(255, 90, 0, 0.06); }
 	.dock-upnl-pill {
 		padding: 4px 10px;
 		font-size: 10px;
@@ -1429,7 +1779,7 @@
 		font-size: 10px;
 		cursor: pointer;
 	}
-	.chart-positions-refresh:hover { border-color: #ff9500; color: #ff9500; }
+	.chart-positions-refresh:hover { border-color: #ff5a00; color: #ff5a00; }
 
 	.chart-positions-empty,
 	.dock-hint {
@@ -1446,7 +1796,7 @@
 	}
 	.chart-position-row {
 		display: grid;
-		grid-template-columns: 1.3fr repeat(7, minmax(80px, 1fr)) 70px;
+		grid-template-columns: 1.3fr repeat(8, minmax(78px, 1fr)) 70px;
 		gap: 8px;
 		padding: 8px 10px;
 		background: #000;
@@ -1468,10 +1818,19 @@
 	.cp-side-short { background: rgba(255, 68, 68, 0.14); color: #ff4444; }
 	.cp-pair-main { color: #eaecef; font-weight: 900; }
 	.cp-ctx-soft { color: #848e9c; font-size: 9px; margin-left: 6px; }
-	.cp-lev-inline { color: #ff9500; margin-left: 3px; font-weight: 900; }
+	.cp-lev-inline { color: #ff5a00; margin-left: 3px; font-weight: 900; }
 	.cp-block { display: flex; flex-direction: column; gap: 2px; }
 	.cp-block-label { color: #666; font-size: 8px; letter-spacing: 0.12em; font-weight: 900; }
 	.cp-block-value { color: #eaecef; font-size: 11px; font-weight: 900; }
+	/* .cp-block-value color must beat .pnl-pos / .pnl-neg when both classes apply (open orders uPnL). */
+	.cp-block-value.pnl-pos {
+		color: #00ff64;
+		background: rgba(0, 255, 100, 0.08);
+	}
+	.cp-block-value.pnl-neg {
+		color: #ff4444;
+		background: rgba(255, 68, 68, 0.08);
+	}
 	.cp-action {
 		background: #000;
 		border: 1px solid #ff4444;
@@ -1486,6 +1845,7 @@
 	.cp-action:hover { background: rgba(255, 68, 68, 0.1); }
 	.cp-action-cancel { border-color: #ffb84d; color: #ffb84d; }
 	.cp-action-cancel:hover { background: rgba(255, 184, 77, 0.1); }
+	.cp-liq-warn { color: #ff8b44; }
 	.cp-action:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.balance-tab-content { padding: 4px 0; }
@@ -1503,9 +1863,75 @@
 	.bal-block { display: flex; flex-direction: column; gap: 3px; }
 	.bal-block-label { color: #666; font-size: 9px; letter-spacing: 0.12em; font-weight: 900; }
 	.bal-block-value { color: #eaecef; font-size: 13px; font-weight: 900; }
-	.bal-asset-name { color: #ff9500; }
+	.bal-asset-name { color: #ff5a00; }
 	.bal-green { color: #00ff64; }
 	.bal-orange { color: #ffb84d; }
+
+	.holdings-section {
+		margin-top: 10px;
+		padding-top: 10px;
+		border-top: 1px solid #1a1a1a;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.holdings-title {
+		color: #ff5a00;
+		font-size: 10px;
+		letter-spacing: 0.16em;
+		font-weight: 900;
+		padding: 0 12px 6px;
+	}
+	.holdings-sub { color: #666; margin-left: 4px; font-weight: 700; }
+	.holdings-head,
+	.holdings-row {
+		display: grid;
+		grid-template-columns: 1.1fr 0.7fr repeat(6, minmax(80px, 1fr)) 70px;
+		gap: 8px;
+		padding: 6px 12px;
+		font-size: 11px;
+		font-weight: 900;
+		align-items: center;
+	}
+	.hd-action-hdr { display: block; }
+	.hr-sell {
+		background: #000;
+		border: 1px solid #ff4444;
+		color: #ff4444;
+		padding: 6px 10px;
+		font-family: inherit;
+		font-size: 10px;
+		font-weight: 900;
+		cursor: pointer;
+		letter-spacing: 0.08em;
+	}
+	.hr-sell:hover { background: rgba(255, 68, 68, 0.1); }
+	.hr-sell:disabled { opacity: 0.5; cursor: not-allowed; }
+	.holdings-head {
+		color: #666;
+		font-size: 9px;
+		letter-spacing: 0.12em;
+		border-bottom: 1px dashed #1a1a1a;
+		font-weight: 900;
+	}
+	.holdings-row {
+		background: #000;
+		border: 1px solid #1a1a1a;
+		border-radius: 6px;
+	}
+	.hd-num { text-align: right; font-variant-numeric: tabular-nums; }
+	.hr-asset { color: #ff5a00; font-weight: 900; }
+	.hr-side {
+		display: inline-block;
+		padding: 2px 6px;
+		font-size: 9px;
+		letter-spacing: 0.1em;
+		border-radius: 4px;
+		font-weight: 900;
+		text-align: center;
+	}
+	.hr-side-long { background: rgba(0, 255, 100, 0.14); color: #00ff64; }
+	.hr-side-short { background: rgba(255, 68, 68, 0.14); color: #ff4444; }
 
 	@media (max-width: 1100px) {
 		.main-grid {

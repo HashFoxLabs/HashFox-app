@@ -90,7 +90,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		font-family: 'Courier New', monospace;
 		font-size: 13px;
@@ -121,8 +121,8 @@
 	}
 	.profile-btn {
 		background: transparent;
-		color: #ff9500;
-		border: 1px solid rgba(255, 149, 0, 0.35);
+		color: #ff5a00;
+		border: 1px solid rgba(255, 90, 0, 0.35);
 		padding: 0 10px;
 		height: 22px;
 		font-family: 'Courier New', monospace;
@@ -134,8 +134,8 @@
 		transition: all 0.15s ease;
 	}
 	.profile-btn:hover {
-		background: rgba(255, 149, 0, 0.12);
-		border-color: rgba(255, 149, 0, 0.7);
+		background: rgba(255, 90, 0, 0.12);
+		border-color: rgba(255, 90, 0, 0.7);
 	}
 	@media (max-width: 520px) {
 		.profile-chip {

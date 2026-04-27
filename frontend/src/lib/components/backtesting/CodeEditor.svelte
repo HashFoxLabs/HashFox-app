@@ -315,7 +315,7 @@
 		font-family: 'Share Tech Mono', monospace;
 		letter-spacing: 0.12em;
 		font-size: 11px;
-		color: #ff9500;
+		color: #ff5a00;
 	}
 	.btn {
 		background: #111;
@@ -349,7 +349,7 @@
 		cursor: pointer;
 		color: #e8e8e8;
 	}
-	.item.active { border-color: rgba(255,149,0,0.6); background: rgba(255,255,255,0.02); }
+	.item.active { border-color: rgba(255, 90, 0,0.6); background: rgba(255,255,255,0.02); }
 	.name { font-weight: 900; font-size: 13px; }
 	.desc { color: #9a9a9a; font-size: 12px; margin-top: 4px; line-height: 1.3; }
 	.meta {

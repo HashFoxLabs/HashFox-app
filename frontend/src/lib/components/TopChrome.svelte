@@ -14,6 +14,7 @@
 	import { hashfoxClient } from '$lib/hashfoxClient';
 	import { findMarket, type MarketEntry } from '$lib/markets';
 	import { USD_SCALE } from '$lib/hashfox';
+	import { userBalance, setUserBalance, clearUserBalance } from '$lib/stores/userBalance';
 
 	const LEFT_PYTH_CRYPTO = ['SOL', 'BTC', 'ETH', 'BNB'] as const;
 	const RIGHT_PYTH_STOCKS = ['NVDA', 'AAPL', 'TSLA', 'MSFT'] as const;
@@ -49,6 +50,9 @@
 	let walletAddress = '';
 	let walletBalanceSol = 0;
 	let usdBalance = 0;
+	userBalance.subscribe((b) => {
+		usdBalance = b.availableUsd;
+	});
 	let accountInitialized = false;
 	let magicBlockStatus = 'Ready - Connect wallet to trade';
 	let fastTradingSessionActive = false;
@@ -93,7 +97,7 @@
 			walletAddress = '';
 			hashfoxClient.setConnectedWallet(null);
 			walletBalanceSol = 0;
-			usdBalance = 0;
+			clearUserBalance();
 			accountInitialized = false;
 			fastTradingSessionActive = false;
 			magicBlockStatus = 'Ready - Connect wallet to trade';
@@ -133,12 +137,11 @@
 			walletBalanceSol = await hashfoxClient.getBalance();
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
-				const acc = await hashfoxClient.getUserAccount();
-				if (acc?.usdBalance) {
-					usdBalance = Number(acc.usdBalance.toString()) / USD_SCALE;
-				}
+				// Push to the shared store so the navbar updates instantly when a
+				// trade panel triggers a refresh too.
+				setUserBalance(await hashfoxClient.getBalanceBreakdown());
 			} else {
-				usdBalance = 0;
+				clearUserBalance();
 			}
 			fastTradingSessionActive = hashfoxClient.isPaperTradingSessionActive();
 			magicBlockStatus = fastTradingSessionActive
@@ -807,11 +810,11 @@
 		overflow-y: hidden;
 		min-height: 52px;
 		scrollbar-width: thin;
-		scrollbar-color: #ff9500 #1a1a1a;
+		scrollbar-color: #ff5a00 #1a1a1a;
 	}
 	.command-bar::-webkit-scrollbar { height: 6px; }
 	.command-bar::-webkit-scrollbar-track { background: #1a1a1a; }
-	.command-bar::-webkit-scrollbar-thumb { background: #ff9500; border-radius: 3px; }
+	.command-bar::-webkit-scrollbar-thumb { background: #ff5a00; border-radius: 3px; }
 
 	.logo {
 		display: inline-flex;
@@ -824,7 +827,7 @@
 	.logo-text {
 		font-size: 19px;
 		font-weight: bold;
-		color: #ff9500;
+		color: #ff5a00;
 		letter-spacing: 2px;
 		font-family: 'Courier New', monospace;
 	}
@@ -852,7 +855,7 @@
 		cursor: pointer;
 	}
 	.nav-link:hover { color: #fff; border-color: #333; }
-	.nav-link.active { color: #ff9500; border-color: #ff9500; }
+	.nav-link.active { color: #ff5a00; border-color: #ff5a00; }
 
 
 	.magicblock-status {
@@ -860,7 +863,7 @@
 		flex-flow: row nowrap;
 		align-items: center;
 		gap: var(--nav-pill-gap);
-		color: #ff9500;
+		color: #ff5a00;
 		font-family: 'Courier New', monospace;
 		font-size: var(--nav-fs);
 		padding: var(--nav-pad-y) var(--nav-pad-x);
@@ -878,9 +881,9 @@
 	.backtesting-btn {
 		display: inline-flex;
 		align-items: center;
-		color: #ff9500;
+		color: #ff5a00;
 		background: #000;
-		border: 1px solid #ff9500;
+		border: 1px solid #ff5a00;
 		text-decoration: none;
 		font-family: 'Courier New', monospace;
 		font-size: var(--nav-fs);
@@ -892,17 +895,17 @@
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
-	.backtesting-btn:hover { background: #ff9500; color: #000; }
-	.backtesting-btn.active { background: #ff9500; color: #000; }
+	.backtesting-btn:hover { background: #ff5a00; color: #000; }
+	.backtesting-btn.active { background: #ff5a00; color: #000; }
 
 	.magicblock-status > * { flex: 0 0 auto; white-space: nowrap; }
 
 	.wallet-balance { color: #00ff00; font-weight: bold; margin-left: 8px; font-size: var(--nav-fs); }
-	.usd-balance { color: #ff9500; font-weight: bold; margin-left: 4px; font-size: var(--nav-fs); }
+	.usd-balance { color: #ff5a00; font-weight: bold; margin-left: 4px; font-size: var(--nav-fs); }
 
 	.airdrop-btn,
 	.initialize-btn {
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		border: none;
 		padding: var(--nav-pad-y) 12px;
@@ -918,7 +921,7 @@
 	.initialize-btn { background: #00ff00; }
 	.initialize-btn:hover:not(:disabled) { background: #33ff33; transform: scale(1.05); }
 	.initialize-btn:disabled { opacity: 0.55; cursor: wait; }
-	.fast-session-btn { background: #ff9500; }
+	.fast-session-btn { background: #ff5a00; }
 	.fast-session-btn:hover { background: #ffb733; }
 	.session-end-btn { background: #3a2020; color: #ff8888; border: 1px solid #663333; }
 	.session-end-btn:hover:not(:disabled) { background: #552828; color: #ffaaaa; transform: none; }
@@ -1023,7 +1026,7 @@
 		flex-shrink: 0;
 	}
 	.ticker-item:hover { color: #ccc; }
-	.ticker-item.ticker-active { color: #ff9500; border-bottom-color: #ff9500; }
+	.ticker-item.ticker-active { color: #ff5a00; border-bottom-color: #ff5a00; }
 	.ticker-sym { font-weight: bold; letter-spacing: 0.03em; }
 	.price { color: #fff; font-weight: bold; }
 	.change-up { color: #00ff00; font-size: 12px; }
@@ -1080,7 +1083,7 @@
 		flex-shrink: 0;
 	}
 	.mimg.fallback {
-		background: radial-gradient(circle at 30% 30%, rgba(255, 149, 0, 0.25), transparent 55%),
+		background: radial-gradient(circle at 30% 30%, rgba(255, 90, 0, 0.25), transparent 55%),
 			linear-gradient(180deg, #080808 0%, #000 100%);
 	}
 	.mttl-wrap {
@@ -1180,7 +1183,7 @@
 		max-width: 460px;
 		max-height: 90vh;
 		overflow: hidden;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 149, 0, 0.06) inset;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 90, 0, 0.06) inset;
 		font-family: 'Courier New', monospace;
 		display: flex;
 		flex-direction: column;
@@ -1206,17 +1209,17 @@
 		border-radius: 50%;
 		flex-shrink: 0;
 	}
-	.hf-dot.orange { background: #ff9500; box-shadow: 0 0 10px rgba(255, 149, 0, 0.7); }
+	.hf-dot.orange { background: #ff5a00; box-shadow: 0 0 10px rgba(255, 90, 0, 0.7); }
 	.hf-dot.green { background: #00ff66; box-shadow: 0 0 10px rgba(0, 255, 102, 0.6); }
 	.hf-dot.pulse { animation: hfPulse 1.4s ease-in-out infinite; }
 	@keyframes hfPulse {
-		0%,100% { box-shadow: 0 0 10px rgba(255, 149, 0, 0.7); }
-		50% { box-shadow: 0 0 18px rgba(255, 149, 0, 0.95); }
+		0%,100% { box-shadow: 0 0 10px rgba(255, 90, 0, 0.7); }
+		50% { box-shadow: 0 0 18px rgba(255, 90, 0, 0.95); }
 	}
 
 	.hf-title {
 		margin: 0;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 12px;
 		font-weight: bold;
 		letter-spacing: 0.25em;
@@ -1228,7 +1231,7 @@
 		font-weight: bold;
 		letter-spacing: 0.18em;
 		color: #000;
-		background: #ff9500;
+		background: #ff5a00;
 		padding: 3px 8px;
 		border-radius: 3px;
 	}
@@ -1243,7 +1246,7 @@
 		line-height: 1.6;
 		margin: 0;
 	}
-	.hf-desc strong { color: #ff9500; font-weight: bold; }
+	.hf-desc strong { color: #ff5a00; font-weight: bold; }
 
 	.hf-balance-row {
 		display: flex;
@@ -1262,7 +1265,7 @@
 	.hf-balance-amount {
 		font-size: 22px;
 		font-weight: bold;
-		color: #ff9500;
+		color: #ff5a00;
 		margin-left: auto;
 	}
 	.hf-balance-unit { font-size: 10px; color: #666; letter-spacing: 0.2em; }
@@ -1293,7 +1296,7 @@
 	.hf-icon-btn {
 		background: #0a0a0a;
 		border: 1px solid #333;
-		color: #ff9500;
+		color: #ff5a00;
 		border-radius: 3px;
 		padding: 4px 8px;
 		cursor: pointer;
@@ -1303,7 +1306,7 @@
 		letter-spacing: 0.15em;
 		transition: all 0.15s ease;
 	}
-	.hf-icon-btn:hover { background: #ff9500; color: #000; border-color: #ff9500; }
+	.hf-icon-btn:hover { background: #ff5a00; color: #000; border-color: #ff5a00; }
 
 	.hf-faucet-link {
 		font-size: 11px;
@@ -1314,8 +1317,8 @@
 	.hf-faucet-link:hover { color: #8cf; text-decoration: underline; }
 
 	.hf-input-card {
-		background: rgba(255, 149, 0, 0.05);
-		border: 1px solid rgba(255, 149, 0, 0.3);
+		background: rgba(255, 90, 0, 0.05);
+		border: 1px solid rgba(255, 90, 0, 0.3);
 		border-radius: 3px;
 		padding: 12px 14px;
 		display: flex;
@@ -1341,16 +1344,16 @@
 		border: 1px solid #333;
 		border-radius: 3px;
 		padding: 8px 10px;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 16px;
 		font-weight: bold;
 		font-family: inherit;
 		outline: none;
 	}
-	.hf-input:focus { border-color: #ff9500; }
-	.hf-input-unit { color: #ff9500; font-size: 11px; font-weight: bold; letter-spacing: 0.15em; }
+	.hf-input:focus { border-color: #ff5a00; }
+	.hf-input-unit { color: #ff5a00; font-size: 11px; font-weight: bold; letter-spacing: 0.15em; }
 	.hf-input-estimate { margin: 0; font-size: 10px; color: #888; letter-spacing: 0.05em; }
-	.hf-input-estimate strong { color: #ff9500; font-weight: bold; }
+	.hf-input-estimate strong { color: #ff5a00; font-weight: bold; }
 
 	.hf-warn {
 		font-size: 10px;
@@ -1382,7 +1385,7 @@
 		align-items: center;
 	}
 	.hf-detail-label { font-size: 9px; color: #555; letter-spacing: 0.18em; }
-	.hf-detail-value { font-size: 12px; color: #ff9500; font-weight: bold; letter-spacing: 0.1em; }
+	.hf-detail-value { font-size: 12px; color: #ff5a00; font-weight: bold; letter-spacing: 0.1em; }
 
 	.hf-actions { display: flex; gap: 8px; }
 	.hf-btn-primary,
@@ -1398,11 +1401,11 @@
 		border: 1px solid transparent;
 		transition: all 0.15s ease;
 	}
-	.hf-btn-primary { background: #ff9500; color: #000; border-color: #ff9500; }
+	.hf-btn-primary { background: #ff5a00; color: #000; border-color: #ff5a00; }
 	.hf-btn-primary:hover:not(:disabled) {
 		background: #ffb733;
 		border-color: #ffb733;
-		box-shadow: 0 0 12px rgba(255, 149, 0, 0.4);
+		box-shadow: 0 0 12px rgba(255, 90, 0, 0.4);
 	}
 	.hf-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 	.hf-btn-primary.full { width: 100%; }

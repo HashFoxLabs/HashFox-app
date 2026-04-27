@@ -113,6 +113,26 @@ export class PolymarketClient {
 		}
 	}
 
+	async fetchMarketByConditionId(
+		conditionId: string
+	): Promise<{ id: string; question: string; yesPrice: number; noPrice: number } | null> {
+		try {
+			const res = await axios.get(
+				`${this.baseURL}/polymarket/market/${encodeURIComponent(conditionId)}`
+			);
+			const m = res.data;
+			if (!m || typeof m !== 'object' || !('question' in m)) return null;
+			return {
+				id: m.id || conditionId,
+				question: m.question || '',
+				yesPrice: Number.isFinite(m.yesPrice) ? m.yesPrice : 0,
+				noPrice: Number.isFinite(m.noPrice) ? m.noPrice : 0
+			};
+		} catch {
+			return null;
+		}
+	}
+
 	private processMarketTokens(market: PolyMarket): PolyMarket {
 		try {
 			const prices = market.outcomePrices

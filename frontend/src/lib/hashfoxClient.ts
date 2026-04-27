@@ -78,6 +78,15 @@ class HashfoxClient {
 			} catch {
 				this.program = null;
 			}
+			// Hydrate the sessionKey store from localStorage so terminals know
+			// fast-trade is active without waiting for a fresh createSession.
+			if (sessionKeyManager.isSessionForWallet(wallet.publicKey)) {
+				sessionKeyManager.publishToStore();
+			} else {
+				sessionKeyManager.resetStore();
+			}
+		} else {
+			sessionKeyManager.resetStore();
 		}
 	}
 
@@ -233,6 +242,43 @@ class HashfoxClient {
 		if (!this.program || !this.connectedWallet?.publicKey) return [];
 		try {
 			const owner = this.connectedWallet.publicKey;
+
+			// Primary path: derive PDAs from user_account.total_trading_positions
+			// and fetch with getMultipleAccountsInfo. This avoids
+			// getProgramAccounts, which devnet throttles aggressively (often
+			// returning [] silently).
+			const userAcc = await this.getUserAccount();
+			const total = userAcc ? Number(userAcc.totalTradingPositions.toString()) : 0;
+
+			if (total > 0) {
+				const pdas: PublicKey[] = [];
+				for (let i = 0; i < total; i++) {
+					const [pda] = PublicKey.findProgramAddressSync(
+						[
+							Buffer.from('trade'),
+							owner.toBuffer(),
+							new BN(i).toArrayLike(Buffer, 'le', 8)
+						],
+						HASHFOX_PROGRAM_PUBKEY
+					);
+					pdas.push(pda);
+				}
+				const fetched = await (this.program.account as any).tradingPosition.fetchMultiple(pdas);
+				const out: EnrichedTradingPosition[] = [];
+				for (let i = 0; i < pdas.length; i++) {
+					if (!fetched[i]) continue;
+					out.push(
+						enrichTradingPosition(
+							pdas[i],
+							fetched[i] as TradingPositionAccount,
+							pairSymbolFromIndex
+						)
+					);
+				}
+				if (out.length > 0) return out;
+			}
+
+			// Fallback: getProgramAccounts (in case the counter is out-of-sync).
 			const accs = await (this.program.account as any).tradingPosition.all([
 				{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 			]);

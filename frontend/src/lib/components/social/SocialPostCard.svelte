@@ -568,8 +568,8 @@
 		width: 100%;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	}
-	.post-row:hover { border-color: rgba(255,149,0,0.55); background: rgba(255,255,255,0.02); }
-	.post-row:focus-visible { outline: 2px solid #ff9500; outline-offset: 2px; }
+	.post-row:hover { border-color: rgba(255, 90, 0,0.55); background: rgba(255,255,255,0.02); }
+	.post-row:focus-visible { outline: 2px solid #ff5a00; outline-offset: 2px; }
 	.post-row.readonly { cursor: default; }
 	.post-row.readonly:hover { border-color: #222; background: #0a0a0a; }
 
@@ -586,7 +586,7 @@
 		width: 44px; height: 44px; border-radius: 50%;
 		display: flex; align-items: center; justify-content: center;
 		object-fit: cover; border: 1px solid #2a2a2a;
-		background: rgba(255,149,0,0.15); color: #ff9500;
+		background: rgba(255, 90, 0,0.15); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 14px;
 	}
 
@@ -615,7 +615,7 @@
 	.chip.type.strategy { color: #ff66cc; border-color: rgba(255,102,204,0.32); background: rgba(255,102,204,0.08); }
 	.chip.dir.up { color: #00ff66; border-color: rgba(0,255,102,0.3); background: rgba(0,255,102,0.08); }
 	.chip.dir.down { color: #ff6b6b; border-color: rgba(255,107,107,0.3); background: rgba(255,107,107,0.08); }
-	.chip.market { color: #ff9500; border-color: rgba(255,149,0,0.3); background: rgba(255,149,0,0.06); }
+	.chip.market { color: #ff5a00; border-color: rgba(255, 90, 0,0.3); background: rgba(255, 90, 0,0.06); }
 	.chip.plat { color: #aaa; }
 	.chip.status { color: #00ff66; border-color: rgba(0,255,102,0.3); background: rgba(0,255,102,0.08); }
 	.chip.status.closed { color: #888; border-color: #333; background: rgba(255,255,255,0.04); }
@@ -624,12 +624,12 @@
 		font-family: 'Courier New', monospace;
 		font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
 		padding: 2px 9px; border-radius: 999px;
-		border: 1px solid rgba(255,149,0,0.45);
-		background: rgba(255,149,0,0.08);
-		color: #ff9500; cursor: pointer;
+		border: 1px solid rgba(255, 90, 0,0.45);
+		background: rgba(255, 90, 0,0.08);
+		color: #ff5a00; cursor: pointer;
 		transition: all 0.15s;
 	}
-	.follow-btn:hover { background: rgba(255,149,0,0.18); }
+	.follow-btn:hover { background: rgba(255, 90, 0,0.18); }
 	.follow-btn.following {
 		border-color: #2a2a2a;
 		background: rgba(255,255,255,0.03);
@@ -687,13 +687,13 @@
 		font-family: 'Courier New', monospace; font-size: 12px; font-weight: 700;
 		cursor: pointer; transition: all 0.15s;
 	}
-	.action-btn:hover { color: #ff9500; background: rgba(255,149,0,0.08); }
-	.action-btn.liked { color: #ff9500; background: rgba(255,149,0,0.1); }
+	.action-btn:hover { color: #ff5a00; background: rgba(255, 90, 0,0.08); }
+	.action-btn.liked { color: #ff5a00; background: rgba(255, 90, 0,0.1); }
 	.action-btn.ghost { margin-left: auto; color: #777; font-size: 11px; letter-spacing: 0.04em; }
-	.action-btn.ghost:hover { color: #ff9500; background: transparent; }
+	.action-btn.ghost:hover { color: #ff5a00; background: transparent; }
 	.market-tag {
 		font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
-		color: #ff9500; font-family: 'Courier New', monospace;
+		color: #ff5a00; font-family: 'Courier New', monospace;
 	}
 
 	.like-wrap { position: relative; }
@@ -733,7 +733,7 @@
 		width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
 		border: 1px solid #2a2a2a;
 		display: flex; align-items: center; justify-content: center;
-		background: rgba(255,149,0,0.15); color: #ff9500;
+		background: rgba(255, 90, 0,0.15); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 12px;
 	}
 	.head-text { display: flex; flex-direction: column; gap: 1px; }
@@ -818,7 +818,7 @@
 
 	.section-title { display: flex; gap: 8px; align-items: center; margin: 14px 0 10px; }
 	.bar { width: 4px; height: 14px; border-radius: 2px; }
-	.bar.orange { background: #ff9500; }
+	.bar.orange { background: #ff5a00; }
 	.bar.purple { background: #ff66cc; }
 	.section-title span {
 		font-family: 'Courier New', monospace;
@@ -853,7 +853,7 @@
 		font-family: 'Courier New', monospace; font-size: 11px;
 	}
 	.config-item span { color: #777; }
-	.config-item strong { color: #ff9500; font-weight: 800; }
+	.config-item strong { color: #ff5a00; font-weight: 800; }
 	.config-item strong.up { color: #00ff66; }
 	.config-item strong.down { color: #ff6b6b; }
 
@@ -882,11 +882,11 @@
 	}
 	.c-avatar.fallback {
 		display: flex; align-items: center; justify-content: center;
-		background: rgba(255,149,0,0.15); color: #ff9500;
+		background: rgba(255, 90, 0,0.15); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 10px;
 	}
 	.c-body { flex: 1; min-width: 0; }
-	.c-user { color: #ff9500; font-size: 11px; font-weight: 700; }
+	.c-user { color: #ff5a00; font-size: 11px; font-weight: 700; }
 	.c-text { color: #fff; font-size: 13px; margin: 2px 0 0; }
 	.c-edit { display: flex; gap: 6px; margin-top: 4px; }
 	.c-edit input {
@@ -894,7 +894,7 @@
 		padding: 6px 10px; border-radius: 8px; color: #fff;
 		font-size: 12px;
 	}
-	.c-edit input:focus { outline: none; border-color: rgba(255,149,0,0.5); }
+	.c-edit input:focus { outline: none; border-color: rgba(255, 90, 0,0.5); }
 	.c-save, .c-cancel {
 		background: transparent; border: none; cursor: pointer;
 		font-size: 11px; font-weight: 700; padding: 0 6px;
@@ -908,7 +908,7 @@
 		display: flex; align-items: center; justify-content: center;
 		border-radius: 4px;
 	}
-	.c-actions button:hover { color: #ff9500; background: rgba(255,255,255,0.04); }
+	.c-actions button:hover { color: #ff5a00; background: rgba(255,255,255,0.04); }
 	.c-actions button.del:hover { color: #ff6b6b; }
 
 	.comment-input-row { display: flex; gap: 6px; }
@@ -918,14 +918,14 @@
 		font-size: 13px;
 	}
 	.comment-input-row input::placeholder { color: #666; }
-	.comment-input-row input:focus { outline: none; border-color: rgba(255,149,0,0.5); }
+	.comment-input-row input:focus { outline: none; border-color: rgba(255, 90, 0,0.5); }
 	.comment-input-row button {
-		background: rgba(255,149,0,0.12); color: #ff9500; border: 1px solid rgba(255,149,0,0.4);
+		background: rgba(255, 90, 0,0.12); color: #ff5a00; border: 1px solid rgba(255, 90, 0,0.4);
 		padding: 9px 16px; border-radius: 10px; font-weight: 700; font-size: 12px;
 		font-family: 'Courier New', monospace; letter-spacing: 0.06em;
 		cursor: pointer; transition: all 0.15s;
 	}
-	.comment-input-row button:hover:not(:disabled) { background: rgba(255,149,0,0.2); }
+	.comment-input-row button:hover:not(:disabled) { background: rgba(255, 90, 0,0.2); }
 	.comment-input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 	@media (max-width: 720px) {

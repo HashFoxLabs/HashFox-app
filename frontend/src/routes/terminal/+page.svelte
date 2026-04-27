@@ -98,7 +98,7 @@
 		cursor: pointer;
 	}
 	.cat:hover { color: #ccc; border-color: #444; }
-	.cat.active { color: #ff9500; border-color: #ff9500; background: rgba(255, 149, 0, 0.05); }
+	.cat.active { color: #ff5a00; border-color: #ff5a00; background: rgba(255, 90, 0, 0.05); }
 
 	.content { padding: 0; }
 

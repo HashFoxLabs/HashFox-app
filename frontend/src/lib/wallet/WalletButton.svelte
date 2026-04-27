@@ -115,7 +115,7 @@
 
 <style>
 	.connect-button {
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		border: none;
 		padding: 8px 18px;
@@ -135,7 +135,7 @@
 	.connect-button:hover:not(:disabled) {
 		background: #ffb733;
 		transform: translateY(-1px);
-		box-shadow: 0 0 12px rgba(255, 149, 0, 0.3);
+		box-shadow: 0 0 12px rgba(255, 90, 0, 0.3);
 	}
 	.connect-button:disabled {
 		opacity: 0.7;
@@ -163,7 +163,7 @@
 		max-width: 140px;
 	}
 	.wallet-address {
-		color: #ff9500;
+		color: #ff5a00;
 		font-family: 'Courier New', monospace;
 		font-size: 12px;
 		font-weight: bold;

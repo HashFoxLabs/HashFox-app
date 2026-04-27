@@ -269,7 +269,7 @@
 		font-size: 12px;
 		cursor: pointer;
 	}
-	.btn:hover { border-color: rgba(255,149,0,0.6); }
+	.btn:hover { border-color: rgba(255, 90, 0,0.6); }
 	.hint {
 		color: #777;
 		font-size: 11px;
@@ -294,8 +294,8 @@
 		letter-spacing: 0.08em;
 	}
 	.tab.active {
-		color: #ff9500;
-		border-color: rgba(255,149,0,0.6);
+		color: #ff5a00;
+		border-color: rgba(255, 90, 0,0.6);
 	}
 	.grid {
 		display: grid;
@@ -312,7 +312,7 @@
 	}
 	.ph {
 		font-family: 'Share Tech Mono', monospace;
-		color: #ff9500;
+		color: #ff5a00;
 		letter-spacing: 0.12em;
 		font-size: 10px;
 		margin-bottom: 10px;

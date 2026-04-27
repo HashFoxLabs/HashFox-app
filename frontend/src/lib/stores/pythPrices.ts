@@ -84,10 +84,14 @@ export async function startPythStream(): Promise<void> {
 				const feeds: any[] = update.parsed ?? [];
 				if (feeds.length === 0) return;
 				pythPrices.update((prices) => {
+					// Must return a new top-level object so Svelte notifies subscribers;
+					// mutating in place and returning the same reference skips updates and
+					// breaks live UI (e.g. History uPnL) that only re-renders on store emit.
+					const next = { ...prices };
 					for (const p of feeds) {
 						const parsed = parseFeedUpdate(p);
 						if (!parsed) continue;
-						prices[parsed.symbol] = {
+						next[parsed.symbol] = {
 							price: parsed.price,
 							change: parsed.change,
 							confidence: parsed.confidence,
@@ -96,7 +100,7 @@ export async function startPythStream(): Promise<void> {
 							spread: parsed.spread
 						};
 					}
-					return prices;
+					return next;
 				});
 				pythLastUpdate.set(Date.now());
 			} catch {

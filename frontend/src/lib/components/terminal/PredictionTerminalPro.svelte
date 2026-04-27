@@ -7,12 +7,16 @@
 	import { polymarketClient, type PolyEvent, type PolyMarket } from '$lib/polymarket';
 	import { pendingPredictionEvent } from '$lib/stores/pendingPredictionEvent';
 	import { hashfoxClient } from '$lib/hashfoxClient';
+	import { sessionKeyManager } from '$lib/solana/session-keys';
+	import { setUserBalance, clearUserBalance } from '$lib/stores/userBalance';
+	import { rememberPredictionMarketName } from '$lib/stores/predictionMarketNames';
 	import MarketPriceChart from '$lib/components/prediction/MarketPriceChart.svelte';
 	import OrderBook from '$lib/components/prediction/OrderBook.svelte';
 	import MarketRules from '$lib/components/prediction/MarketRules.svelte';
 	import {
 		buildConnection,
 		buildProgram,
+		buildKeypairProgram,
 		buyYes,
 		buyNo,
 		sellYes,
@@ -180,6 +184,7 @@
 	async function refreshAccount() {
 		if (!wallet?.connected) {
 			balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
+			clearUserBalance();
 			accountInitialized = false;
 			userPositions = [];
 			return;
@@ -189,9 +194,11 @@
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
 				balance = await hashfoxClient.getBalanceBreakdown();
+				setUserBalance(balance);
 				await loadUserPositions();
 			} else {
 				balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
+				clearUserBalance();
 				userPositions = [];
 			}
 		} catch (err) {
@@ -287,13 +294,22 @@
 		statusMessage = 'Submitting…';
 		try {
 			const conn = buildConnection();
-			const program = buildProgram(conn, wallet.adapter);
-			const acc = await getUserAccount(program, wallet.publicKey);
+			const walletProgram = buildProgram(conn, wallet.adapter);
+			const acc = await getUserAccount(walletProgram, wallet.publicKey);
 			if (!acc) {
 				statusMessage = 'Initializing paper account…';
-				await initializeUserAccount(program, wallet.publicKey, new BN(10_000_000));
+				await initializeUserAccount(walletProgram, wallet.publicKey, new BN(10_000_000));
 			}
-			const sessionToken: PublicKey | null = session.active ? session.token : null;
+
+			const sessionActive =
+				session.active &&
+				sessionKeyManager.isSessionActive() &&
+				sessionKeyManager.isSessionForWallet(wallet.publicKey);
+			const sessionKp = sessionActive ? sessionKeyManager.getSessionKeypair() : null;
+			const sessionTokenPda = sessionActive ? sessionKeyManager.getSessionTokenPDA() : null;
+			const program = sessionKp ? buildKeypairProgram(conn, sessionKp) : walletProgram;
+			const signer: PublicKey = sessionKp ? sessionKp.publicKey : wallet.publicKey;
+			const sessionToken: PublicKey | null = sessionTokenPda;
 
 			let sig = '';
 			if (tradeTab === 'Buy') {
@@ -305,8 +321,12 @@
 					pricePerShare: priceScaled(priceDec),
 					stopLoss: stopLoss > 0 ? priceScaled(stopLoss / 100) : new BN(0),
 					takeProfit: takeProfit > 0 ? priceScaled(takeProfit / 100) : new BN(0),
-					sessionToken
+					sessionToken,
+					signer
 				});
+				if (selectedMarket.question) {
+					rememberPredictionMarketName(marketId, selectedMarket.question);
+				}
 			} else {
 				if (!selectedPosition) throw new Error('No position selected');
 				const fn = selectedSide === 'Yes' ? sellYes : sellNo;
@@ -316,7 +336,8 @@
 					new BN(selectedPosition.positionId),
 					usd(amount),
 					priceScaled(priceDec),
-					sessionToken
+					sessionToken,
+					signer
 				);
 			}
 
@@ -345,6 +366,11 @@
 		}
 		try {
 			const batch = await polymarketClient.fetchEvents(PAGE_SIZE, eventsOffset);
+			for (const ev of batch) {
+				for (const m of ev.markets ?? []) {
+					if (m.id && m.question) rememberPredictionMarketName(m.id, m.question);
+				}
+			}
 			if (append) {
 				const seen = new Set(events.map((e) => e.id));
 				events = [...events, ...batch.filter((e) => !seen.has(e.id))];
@@ -989,7 +1015,7 @@
 		color: inherit;
 		font-family: inherit;
 	}
-	.ec-head:hover { background: rgba(255, 149, 0, 0.04); }
+	.ec-head:hover { background: rgba(255, 90, 0, 0.04); }
 	.ec-img {
 		width: 34px;
 		height: 34px;
@@ -1051,7 +1077,7 @@
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}
-	.ec-q:hover .ec-q-text { color: #ff9500; }
+	.ec-q:hover .ec-q-text { color: #ff5a00; }
 	.ec-chance {
 		display: flex;
 		flex-direction: column;
@@ -1105,7 +1131,7 @@
 		margin-left: auto;
 		background: transparent;
 		border: 1px solid #222;
-		color: #ff9500;
+		color: #ff5a00;
 		padding: 4px 10px;
 		font-family: inherit;
 		font-size: 10px;
@@ -1114,7 +1140,7 @@
 		border-radius: 4px;
 		cursor: pointer;
 	}
-	.ec-open:hover { border-color: #ff9500; background: rgba(255, 149, 0, 0.06); }
+	.ec-open:hover { border-color: #ff5a00; background: rgba(255, 90, 0, 0.06); }
 
 	.list-loading.more { padding: 20px 0; }
 	.list-end {
@@ -1151,7 +1177,7 @@
 		width: 18px;
 		height: 18px;
 		border: 2px solid #222;
-		border-top-color: #ff9500;
+		border-top-color: #ff5a00;
 		border-radius: 50%;
 		animation: pl-spin 0.8s linear infinite;
 	}
@@ -1179,7 +1205,7 @@
 		transition: background 0.12s;
 	}
 	.el-row:hover:not(.el-head) {
-		background: rgba(255, 149, 0, 0.04);
+		background: rgba(255, 90, 0, 0.04);
 	}
 	.el-head {
 		background: #0a0a0a;
@@ -1240,7 +1266,7 @@
 	.el-yes { color: #00ff64; }
 	.el-date { color: #888; }
 	.el-chev { color: #555; text-align: right; }
-	.el-row:hover .el-chev { color: #ff9500; }
+	.el-row:hover .el-chev { color: #ff5a00; }
 
 	/* balance pills shared */
 	.bs-cell {
@@ -1260,7 +1286,7 @@
 		font-weight: 900;
 	}
 	.bs-value { color: #e8e8e8; font-size: 13px; font-weight: 900; }
-	.bs-usdt { color: #ff9500; }
+	.bs-usdt { color: #ff5a00; }
 	.bs-avail { color: #00ff64; }
 	.bs-lock.is-lock { color: #ffb84d; }
 
@@ -1286,7 +1312,7 @@
 		font-weight: 900;
 		font-family: inherit;
 	}
-	.ev-back:hover { border-color: #ff9500; color: #ff9500; }
+	.ev-back:hover { border-color: #ff5a00; color: #ff5a00; }
 	.ev-logo {
 		width: 26px;
 		height: 26px;
@@ -1361,7 +1387,7 @@
 
 	.ev-sidebar-label {
 		padding: 10px 14px;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 11px;
 		letter-spacing: 0.14em;
 		font-weight: 900;
@@ -1386,8 +1412,8 @@
 	}
 	.ev-mrow:hover { background: #111; }
 	.ev-mrow.active {
-		background: rgba(255, 149, 0, 0.08);
-		border-left: 2px solid #ff9500;
+		background: rgba(255, 90, 0, 0.08);
+		border-left: 2px solid #ff5a00;
 	}
 	.ev-mrow-bar {
 		width: 14px;
@@ -1517,8 +1543,8 @@
 	}
 	.ev-ctab:hover { color: #ccc; }
 	.ev-ctab.active {
-		color: #ff9500;
-		border-bottom-color: #ff9500;
+		color: #ff5a00;
+		border-bottom-color: #ff5a00;
 	}
 
 	.ev-center-content {
@@ -1602,8 +1628,8 @@
 		border-bottom: 2px solid transparent;
 	}
 	.tt-btn.tt-active {
-		color: #ff9500;
-		border-bottom-color: #ff9500;
+		color: #ff5a00;
+		border-bottom-color: #ff5a00;
 	}
 
 	.amount-block { display: flex; flex-direction: column; gap: 6px; }
@@ -1657,7 +1683,7 @@
 		cursor: pointer;
 		border-radius: 4px;
 	}
-	.q-btn:hover { border-color: #ff9500; color: #ff9500; }
+	.q-btn:hover { border-color: #ff5a00; color: #ff5a00; }
 
 	.sltp-wrap {
 		border: 1px solid #1a1a1a;
@@ -1745,8 +1771,8 @@
 		transition: border-color 0.15s, box-shadow 0.15s;
 	}
 	.sltp-input-wrap:focus-within {
-		border-color: #ff9500;
-		box-shadow: 0 0 0 1px rgba(255, 149, 0, 0.18);
+		border-color: #ff5a00;
+		box-shadow: 0 0 0 1px rgba(255, 90, 0, 0.18);
 	}
 	.sltp-input {
 		flex: 1;
@@ -1789,8 +1815,8 @@
 		border-radius: 6px;
 	}
 	.pos-row.active {
-		border-color: #ff9500;
-		background: rgba(255, 149, 0, 0.05);
+		border-color: #ff5a00;
+		background: rgba(255, 90, 0, 0.05);
 	}
 	.pr-side { font-weight: 900; letter-spacing: 0.08em; font-size: 10px; }
 	.pr-yes { color: #00ff64; }
@@ -1823,7 +1849,7 @@
 		color: #aaa;
 	}
 	.sum-row.hl { color: #fff; font-weight: 900; margin-top: 4px; }
-	.orange { color: #ff9500; }
+	.orange { color: #ff5a00; }
 
 	.action {
 		padding: 13px 14px;
@@ -1861,10 +1887,10 @@
 
 	.status-msg {
 		font-size: 10px;
-		color: #ff9500;
+		color: #ff5a00;
 		text-align: center;
 		padding: 4px 8px;
-		background: rgba(255, 149, 0, 0.08);
+		background: rgba(255, 90, 0, 0.08);
 		border-radius: 4px;
 	}
 
@@ -1906,7 +1932,7 @@
 		cursor: pointer;
 		border-radius: 4px;
 	}
-	.bs-refresh:hover { border-color: #ff9500; color: #ff9500; }
+	.bs-refresh:hover { border-color: #ff5a00; color: #ff5a00; }
 	.bs-hint {
 		margin-top: 8px;
 		font-size: 10px;

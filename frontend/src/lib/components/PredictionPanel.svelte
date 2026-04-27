@@ -165,7 +165,7 @@
 	}
 	.list-header {
 		padding: 10px 12px;
-		color: #ff9500;
+		color: #ff5a00;
 		font-family: 'Courier New', monospace;
 		font-size: 11px;
 		font-weight: bold;
@@ -190,7 +190,7 @@
 		width: 100%;
 	}
 	.event-row:hover { background: #1a1a1a; }
-	.event-row.active { background: rgba(255, 149, 0, 0.1); border-left: 2px solid #ff9500; }
+	.event-row.active { background: rgba(255, 90, 0, 0.1); border-left: 2px solid #ff5a00; }
 	.ev-title { font-size: 12px; font-weight: bold; line-height: 1.35; }
 	.ev-vol { font-size: 10px; color: #666; }
 
@@ -232,7 +232,7 @@
 		font-size: 13px;
 		outline: none;
 	}
-	.field input:focus { border-color: #ff9500; }
+	.field input:focus { border-color: #ff5a00; }
 
 	.submit {
 		width: 100%;

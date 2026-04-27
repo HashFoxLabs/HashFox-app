@@ -153,7 +153,7 @@
 		max-width: 440px;
 		max-height: 90vh;
 		overflow: hidden;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 149, 0, 0.06) inset;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 90, 0, 0.06) inset;
 		font-family: 'Courier New', monospace;
 	}
 	.modal-header {
@@ -173,12 +173,12 @@
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: #ff9500;
-		box-shadow: 0 0 10px rgba(255, 149, 0, 0.7);
+		background: #ff5a00;
+		box-shadow: 0 0 10px rgba(255, 90, 0, 0.7);
 	}
 	.modal-header h3 {
 		margin: 0;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 12px;
 		font-weight: bold;
 		letter-spacing: 0.25em;
@@ -198,8 +198,8 @@
 		transition: all 0.15s ease;
 	}
 	.close-button:hover {
-		color: #ff9500;
-		border-color: #ff9500;
+		color: #ff5a00;
+		border-color: #ff5a00;
 	}
 	.modal-body {
 		padding: 16px;
@@ -217,7 +217,7 @@
 		align-items: center;
 		gap: 14px;
 		padding: 40px 20px;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 11px;
 		letter-spacing: 0.18em;
 	}
@@ -225,7 +225,7 @@
 		width: 28px;
 		height: 28px;
 		border: 2px solid #222;
-		border-top: 2px solid #ff9500;
+		border-top: 2px solid #ff5a00;
 		border-radius: 50%;
 		animation: spin 1s linear infinite;
 	}
@@ -255,7 +255,7 @@
 		text-align: left;
 	}
 	.wallet-button:hover:not(:disabled) {
-		border-color: #ff9500;
+		border-color: #ff5a00;
 		background: #0f0a00;
 		transform: translateY(-1px);
 	}
@@ -264,11 +264,11 @@
 		cursor: not-allowed;
 	}
 	.wallet-button.embedded {
-		border-color: #ff9500;
+		border-color: #ff5a00;
 		background: linear-gradient(180deg, #120a00 0%, #000 100%);
 	}
 	.wallet-button.embedded:hover {
-		box-shadow: 0 0 14px rgba(255, 149, 0, 0.18);
+		box-shadow: 0 0 14px rgba(255, 90, 0, 0.18);
 	}
 	.wallet-info {
 		display: flex;
@@ -281,7 +281,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #ff9500;
+		color: #ff5a00;
 		background: #0a0a0a;
 		border: 1px solid #222;
 		border-radius: 3px;
@@ -292,14 +292,14 @@
 		display: block;
 	}
 	.embedded-icon {
-		color: #ff9500;
-		background: rgba(255, 149, 0, 0.1);
-		border-color: rgba(255, 149, 0, 0.4);
+		color: #ff5a00;
+		background: rgba(255, 90, 0, 0.1);
+		border-color: rgba(255, 90, 0, 0.4);
 	}
 	.wallet-icon-placeholder {
 		width: 22px;
 		height: 22px;
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		border-radius: 50%;
 		display: flex;
@@ -316,7 +316,7 @@
 	.wallet-name {
 		font-size: 12px;
 		font-weight: bold;
-		color: #ff9500;
+		color: #ff5a00;
 		letter-spacing: 0.08em;
 	}
 	.wallet-sub {
@@ -345,7 +345,7 @@
 	.status-embedded {
 		font-size: 9px;
 		color: #000;
-		background: #ff9500;
+		background: #ff5a00;
 		padding: 3px 6px;
 		border-radius: 3px;
 		letter-spacing: 0.12em;

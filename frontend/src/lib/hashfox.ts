@@ -1,5 +1,5 @@
 import { AnchorProvider, Program, BN, type BNType, type Idl } from '$lib/vendor/anchor';
-import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import type { Adapter, SignerWalletAdapter } from '@solana/wallet-adapter-base';
 import { HASHFOX_PROGRAM_ID, SOLANA_RPC } from './env';
 import idlJson from './idl/hashfox.json';
@@ -117,7 +117,14 @@ export type EnrichedTradingPosition = {
 function enumKey(v: any): string {
 	if (!v || typeof v !== 'object') return '';
 	const k = Object.keys(v)[0];
-	return k ? k.toLowerCase() : '';
+	if (!k) return '';
+	const lc = k.toLowerCase();
+	// Anchor IDL variants like `PendingFill` deserialize to `pendingFill`;
+	// our EnrichedTradingPosition union uses the shorter `pending` form.
+	if (lc === 'pendingfill') return 'pending';
+	if (lc === 'partiallysold') return 'partiallysold';
+	if (lc === 'fullysold') return 'fullysold';
+	return lc;
 }
 
 function adapterToAnchorWallet(adapter: Adapter) {
@@ -137,6 +144,28 @@ export function buildConnection(): Connection {
 export function buildProgram(connection: Connection, adapter: Adapter): any {
 	const wallet = adapterToAnchorWallet(adapter);
 	const provider = new AnchorProvider(connection, wallet as any, { commitment: 'confirmed' });
+	return new Program(idlJson as Idl, provider);
+}
+
+/** Build a Program where the given Keypair signs every transaction.
+ * Used for fast-trade flows: when a session keypair is active, we sign with it
+ * locally so trades don't pop up the wallet adapter. */
+export function buildKeypairProgram(connection: Connection, keypair: Keypair): any {
+	const wallet = {
+		publicKey: keypair.publicKey,
+		signTransaction: async <T extends Transaction>(tx: T) => {
+			tx.partialSign(keypair);
+			return tx;
+		},
+		signAllTransactions: async <T extends Transaction>(txs: T[]) => {
+			for (const tx of txs) tx.partialSign(keypair);
+			return txs;
+		}
+	};
+	const provider = new AnchorProvider(connection, wallet as any, {
+		commitment: 'confirmed',
+		preflightCommitment: 'confirmed'
+	});
 	return new Program(idlJson as Idl, provider);
 }
 
@@ -213,7 +242,7 @@ export async function initializeUserAccount(
 
 export async function openMarketPosition(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	params: {
 		marketCategory: MarketCategoryVariant;
 		pairIndex: number;
@@ -225,12 +254,15 @@ export async function openMarketPosition(
 		stopLossPrice: BNType;
 		entryPrice: BNType;
 		sessionToken?: PublicKey | null;
+		/** Tx signer; defaults to authority. Used by fast-trade session keys. */
+		signer?: PublicKey;
 	}
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
+	const signer = params.signer ?? authority;
+	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalTradingPositions;
-	const [positionPda] = findTradePda(user, positionId);
+	const [positionPda] = findTradePda(authority, positionId);
 
 	return await program.methods
 		.openMarketPosition(
@@ -248,7 +280,7 @@ export async function openMarketPosition(
 			userAccount: userPda,
 			position: positionPda,
 			sessionToken: params.sessionToken ?? null,
-			user,
+			user: signer,
 			systemProgram: SystemProgram.programId
 		})
 		.rpc();
@@ -256,7 +288,7 @@ export async function openMarketPosition(
 
 export async function openLimitOrder(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	params: {
 		marketCategory: MarketCategoryVariant;
 		pairIndex: number;
@@ -268,12 +300,14 @@ export async function openLimitOrder(
 		takeProfitPrice: BNType;
 		stopLossPrice: BNType;
 		sessionToken?: PublicKey | null;
+		signer?: PublicKey;
 	}
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
+	const signer = params.signer ?? authority;
+	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalTradingPositions;
-	const [positionPda] = findTradePda(user, positionId);
+	const [positionPda] = findTradePda(authority, positionId);
 
 	return await program.methods
 		.openLimitOrder(
@@ -291,7 +325,7 @@ export async function openLimitOrder(
 			userAccount: userPda,
 			position: positionPda,
 			sessionToken: params.sessionToken ?? null,
-			user,
+			user: signer,
 			systemProgram: SystemProgram.programId
 		})
 		.rpc();
@@ -299,36 +333,40 @@ export async function openLimitOrder(
 
 export async function closeTradingPosition(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	positionId: BNType,
 	currentPrice: BNType,
-	sessionToken: PublicKey | null = null
+	sessionToken: PublicKey | null = null,
+	signer?: PublicKey
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
-	const [positionPda] = findTradePda(user, positionId);
+	const txSigner = signer ?? authority;
+	const [userPda] = findUserPda(authority);
+	const [positionPda] = findTradePda(authority, positionId);
 	return await program.methods
 		.closeTradingPosition(currentPrice)
-		.accounts(<any>{ userAccount: userPda, position: positionPda, user, sessionToken })
+		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
 		.rpc();
 }
 
 export async function cancelLimitOrder(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	positionId: BNType,
-	sessionToken: PublicKey | null = null
+	sessionToken: PublicKey | null = null,
+	signer?: PublicKey
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
-	const [positionPda] = findTradePda(user, positionId);
+	const txSigner = signer ?? authority;
+	const [userPda] = findUserPda(authority);
+	const [positionPda] = findTradePda(authority, positionId);
 	return await program.methods
 		.cancelLimitOrder()
-		.accounts(<any>{ userAccount: userPda, position: positionPda, user, sessionToken })
+		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
 		.rpc();
 }
 
 export async function buyYes(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	params: {
 		marketId: string;
 		amountUsd: BNType;
@@ -336,19 +374,21 @@ export async function buyYes(
 		stopLoss: BNType;
 		takeProfit: BNType;
 		sessionToken?: PublicKey | null;
+		signer?: PublicKey;
 	}
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
+	const signer = params.signer ?? authority;
+	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalPredictionPositions;
-	const [positionPda] = findPredPda(user, positionId);
+	const [positionPda] = findPredPda(authority, positionId);
 	return await program.methods
 		.buyYes(params.marketId, params.amountUsd, params.pricePerShare, params.stopLoss, params.takeProfit)
 		.accounts(<any>{
 			userAccount: userPda,
 			position: positionPda,
 			sessionToken: params.sessionToken ?? null,
-			user,
+			user: signer,
 			systemProgram: SystemProgram.programId
 		})
 		.rpc();
@@ -356,7 +396,7 @@ export async function buyYes(
 
 export async function buyNo(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	params: {
 		marketId: string;
 		amountUsd: BNType;
@@ -364,19 +404,21 @@ export async function buyNo(
 		stopLoss: BNType;
 		takeProfit: BNType;
 		sessionToken?: PublicKey | null;
+		signer?: PublicKey;
 	}
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
+	const signer = params.signer ?? authority;
+	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalPredictionPositions;
-	const [positionPda] = findPredPda(user, positionId);
+	const [positionPda] = findPredPda(authority, positionId);
 	return await program.methods
 		.buyNo(params.marketId, params.amountUsd, params.pricePerShare, params.stopLoss, params.takeProfit)
 		.accounts(<any>{
 			userAccount: userPda,
 			position: positionPda,
 			sessionToken: params.sessionToken ?? null,
-			user,
+			user: signer,
 			systemProgram: SystemProgram.programId
 		})
 		.rpc();
@@ -384,55 +426,101 @@ export async function buyNo(
 
 export async function sellYes(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	positionId: BNType,
 	sharesToSell: BNType,
 	currentPrice: BNType,
-	sessionToken: PublicKey | null = null
+	sessionToken: PublicKey | null = null,
+	signer?: PublicKey
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
-	const [positionPda] = findPredPda(user, positionId);
+	const txSigner = signer ?? authority;
+	const [userPda] = findUserPda(authority);
+	const [positionPda] = findPredPda(authority, positionId);
 	return await program.methods
 		.sellYes(sharesToSell, currentPrice)
-		.accounts(<any>{ userAccount: userPda, position: positionPda, user, sessionToken })
+		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
 		.rpc();
 }
 
 export async function sellNo(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	positionId: BNType,
 	sharesToSell: BNType,
 	currentPrice: BNType,
-	sessionToken: PublicKey | null = null
+	sessionToken: PublicKey | null = null,
+	signer?: PublicKey
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
-	const [positionPda] = findPredPda(user, positionId);
+	const txSigner = signer ?? authority;
+	const [userPda] = findUserPda(authority);
+	const [positionPda] = findPredPda(authority, positionId);
 	return await program.methods
 		.sellNo(sharesToSell, currentPrice)
-		.accounts(<any>{ userAccount: userPda, position: positionPda, user, sessionToken })
+		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
 		.rpc();
 }
 
 export async function closePredictionPosition(
 	program: any,
-	user: PublicKey,
+	authority: PublicKey,
 	positionId: BNType,
 	currentPrice: BNType,
-	sessionToken: PublicKey | null = null
+	sessionToken: PublicKey | null = null,
+	signer?: PublicKey
 ): Promise<string> {
-	const [userPda] = findUserPda(user);
-	const [positionPda] = findPredPda(user, positionId);
+	const txSigner = signer ?? authority;
+	const [userPda] = findUserPda(authority);
+	const [positionPda] = findPredPda(authority, positionId);
 	return await program.methods
 		.closePredictionPosition(currentPrice)
-		.accounts(<any>{ userAccount: userPda, position: positionPda, user, sessionToken })
+		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
 		.rpc();
+}
+
+/** Derive position PDAs from the user_account counter and fetch in one batch.
+ * This avoids `getProgramAccounts`, which devnet throttles aggressively. */
+async function fetchPositionsByCounter<T>(
+	program: any,
+	owner: PublicKey,
+	seed: 'trade' | 'pred',
+	count: number,
+	accountKey: 'tradingPosition' | 'predictionPosition'
+): Promise<Array<{ pubkey: PublicKey; account: T }>> {
+	if (count <= 0) return [];
+	const pdas: PublicKey[] = [];
+	for (let i = 0; i < count; i++) {
+		const [pda] = PublicKey.findProgramAddressSync(
+			[Buffer.from(seed), owner.toBuffer(), new BN(i).toArrayLike(Buffer, 'le', 8)],
+			PROGRAM_ID
+		);
+		pdas.push(pda);
+	}
+	const fetched = await (program.account as any)[accountKey].fetchMultiple(pdas);
+	const out: Array<{ pubkey: PublicKey; account: T }> = [];
+	for (let i = 0; i < pdas.length; i++) {
+		if (fetched[i]) out.push({ pubkey: pdas[i], account: fetched[i] as T });
+	}
+	return out;
 }
 
 export async function fetchAllTradingPositions(
 	program: any,
 	owner: PublicKey
 ): Promise<Array<{ pubkey: PublicKey; account: TradingPositionAccount }>> {
+	try {
+		const userAcc = await getUserAccount(program, owner);
+		const total = userAcc ? Number(userAcc.totalTradingPositions.toString()) : 0;
+		const byCounter = await fetchPositionsByCounter<TradingPositionAccount>(
+			program,
+			owner,
+			'trade',
+			total,
+			'tradingPosition'
+		);
+		if (byCounter.length > 0) return byCounter;
+	} catch {
+		/* fall through to getProgramAccounts */
+	}
 	const all = await (program.account as any).tradingPosition.all([
 		{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 	]);
@@ -443,6 +531,20 @@ export async function fetchAllPredictionPositions(
 	program: any,
 	owner: PublicKey
 ): Promise<Array<{ pubkey: PublicKey; account: PredictionPositionAccount }>> {
+	try {
+		const userAcc = await getUserAccount(program, owner);
+		const total = userAcc ? Number(userAcc.totalPredictionPositions.toString()) : 0;
+		const byCounter = await fetchPositionsByCounter<PredictionPositionAccount>(
+			program,
+			owner,
+			'pred',
+			total,
+			'predictionPosition'
+		);
+		if (byCounter.length > 0) return byCounter;
+	} catch {
+		/* fall through to getProgramAccounts */
+	}
 	const all = await (program.account as any).predictionPosition.all([
 		{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 	]);

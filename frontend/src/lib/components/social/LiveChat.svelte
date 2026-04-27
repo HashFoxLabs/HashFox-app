@@ -479,7 +479,7 @@
 		background: transparent; border: none; color: #888;
 		cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;
 	}
-	.icon-btn:hover { color: #ff9500; }
+	.icon-btn:hover { color: #ff5a00; }
 	.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 	.icon-btn.video-btn:hover:not(:disabled) { color: #00ff66; }
 
@@ -519,7 +519,7 @@
 	}
 	.m-avatar.fallback {
 		display: flex; align-items: center; justify-content: center;
-		background: rgba(255,149,0,0.15); color: #ff9500;
+		background: rgba(255, 90, 0,0.15); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 13px;
 	}
 	.m-avatar.fallback.own {
@@ -551,7 +551,7 @@
 	.quote { display: flex; gap: 8px; align-items: stretch; padding: 4px 0 6px; }
 	.q-bar { width: 2px; background: #2a2a2a; border-radius: 2px; flex-shrink: 0; }
 	.q-body { display: flex; gap: 8px; align-items: baseline; min-width: 0; overflow: hidden; }
-	.q-user { color: #ff9500; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+	.q-user { color: #ff5a00; font-size: 11px; font-weight: 700; flex-shrink: 0; }
 	.q-text { color: #888; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 	.m-actions {
@@ -569,19 +569,19 @@
 		background: transparent; border: none; color: #888;
 		cursor: pointer; border-radius: 6px;
 	}
-	.m-actions button:hover { color: #ff9500; background: rgba(255,255,255,0.04); }
+	.m-actions button:hover { color: #ff5a00; background: rgba(255,255,255,0.04); }
 	.m-actions button.del:hover { color: #ff6b6b; }
 
 	.edit-row { display: flex; gap: 6px; margin-top: 2px; }
 	.edit-row input {
 		flex: 1;
 		background: rgba(255,255,255,0.04);
-		border: 1px solid rgba(255,149,0,0.5);
+		border: 1px solid rgba(255, 90, 0,0.5);
 		padding: 7px 12px; border-radius: 8px;
 		color: #fff; font-size: 13px;
 		font-family: inherit;
 	}
-	.edit-row input:focus { outline: none; border-color: #ff9500; }
+	.edit-row input:focus { outline: none; border-color: #ff5a00; }
 	.edit-row .ok, .edit-row .cancel {
 		background: transparent; border: none; cursor: pointer;
 		font-size: 11px; font-weight: 700;
@@ -603,9 +603,9 @@
 		margin: 0 auto;
 	}
 	.reply-bar.embedded { padding: 7px 12px; max-width: none; }
-	.rb-left { display: flex; gap: 6px; align-items: center; min-width: 0; flex: 1; color: #ff9500; }
+	.rb-left { display: flex; gap: 6px; align-items: center; min-width: 0; flex: 1; color: #ff5a00; }
 	.rb-label { font-family: 'Courier New', monospace; font-size: 11px; color: #888; letter-spacing: 0.05em; }
-	.rb-user { color: #ff9500; font-weight: 700; font-size: 12px; }
+	.rb-user { color: #ff5a00; font-weight: 700; font-size: 12px; }
 	.rb-text { color: #888; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 	.rb-close { background: transparent; border: none; color: #666; cursor: pointer; flex-shrink: 0; padding: 2px; }
 	.rb-close:hover { color: #fff; }
@@ -631,17 +631,17 @@
 		font-family: inherit;
 	}
 	.chat-foot input::placeholder { color: #666; }
-	.chat-foot input:focus { outline: none; border-color: rgba(255,149,0,0.5); }
+	.chat-foot input:focus { outline: none; border-color: rgba(255, 90, 0,0.5); }
 	.chat-foot input:disabled { opacity: 0.5; cursor: not-allowed; }
 	.chat-foot button {
-		background: rgba(255,149,0,0.12); color: #ff9500;
-		border: 1px solid rgba(255,149,0,0.4);
+		background: rgba(255, 90, 0,0.12); color: #ff5a00;
+		border: 1px solid rgba(255, 90, 0,0.4);
 		padding: 10px 18px; border-radius: 10px;
 		font-weight: 700; font-size: 12px;
 		font-family: 'Courier New', monospace; letter-spacing: 0.06em;
 		cursor: pointer; transition: all 0.15s;
 	}
-	.chat-foot button:hover:not(:disabled) { background: rgba(255,149,0,0.2); }
+	.chat-foot button:hover:not(:disabled) { background: rgba(255, 90, 0,0.2); }
 	.chat-foot button:disabled { opacity: 0.4; cursor: not-allowed; }
 	.connect-prompt {
 		flex: 1; text-align: center; color: #888;

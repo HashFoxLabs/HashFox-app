@@ -398,10 +398,10 @@
 		letter-spacing: 0.08em;
 		cursor: pointer;
 	}
-	.tab.active { color: #ff9500; border-color: #ff9500; background: rgba(255,149,0,0.05); }
+	.tab.active { color: #ff5a00; border-color: #ff5a00; background: rgba(255, 90, 0,0.05); }
 	.spacer { flex: 1; }
 	.link { color: #aaa; text-decoration: none; font-size: 11px; }
-	.link:hover { color: #ff9500; }
+	.link:hover { color: #ff5a00; }
 
 	/* Full bleed */
 	.hero {
@@ -427,7 +427,7 @@
 		width: 100%;
 		height: 100%;
 		background:
-			radial-gradient(circle at 25% 25%, rgba(255, 149, 0, 0.30), transparent 55%),
+			radial-gradient(circle at 25% 25%, rgba(255, 90, 0, 0.30), transparent 55%),
 			linear-gradient(180deg, #080808 0%, #000 100%);
 	}
 	.banner-shade {
@@ -444,7 +444,7 @@
 		border: 1px solid #333;
 		padding: 8px 12px;
 		border-radius: 3px;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 10px;
 		letter-spacing: 0.12em;
 	}
@@ -466,7 +466,7 @@
 		background: #000;
 		position: relative;
 		cursor: pointer;
-		box-shadow: 0 0 0 2px rgba(255,149,0,0.08) inset;
+		box-shadow: 0 0 0 2px rgba(255, 90, 0,0.08) inset;
 		flex-shrink: 0;
 	}
 	.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -476,7 +476,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		font-size: 46px;
 		font-weight: 900;
@@ -493,7 +493,7 @@
 		color: #ccc;
 	}
 	.meta { min-width: 0; padding-bottom: 10px; }
-	.uname { color: #ff9500; font-size: 22px; font-weight: 900; letter-spacing: 0.04em; }
+	.uname { color: #ff5a00; font-size: 22px; font-weight: 900; letter-spacing: 0.04em; }
 	.addr {
 		color: #aaa;
 		font-size: 12px;
@@ -504,7 +504,7 @@
 		white-space: nowrap;
 		cursor: pointer;
 	}
-	.addr:hover { color: #ff9500; }
+	.addr:hover { color: #ff5a00; }
 
 	.card {
 		background: #121212;
