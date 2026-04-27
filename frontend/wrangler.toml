@@ -1,9 +1,13 @@
-# HashFox frontend — Cloudflare Pages (SvelteKit + adapter-cloudflare).
-# Dashboard: connect repo, set root directory to `frontend`, build `npm run build`,
-# output directory `.svelte-kit/cloudflare`, Node 20+.
-# Commit `package-lock.json` whenever `package.json` changes — Pages uses `npm ci` and fails if they differ.
-# CLI: cd frontend && npm run build && npx wrangler pages deploy .svelte-kit/cloudflare --project-name=YOUR_PROJECT
+# Cloudflare Workers (Git integration: build `npm run build`, deploy `npx wrangler deploy`, root `/frontend`).
+# Matches https://svelte.dev/docs/kit/adapter-cloudflare — Workers + Static Assets.
+#
+# For Cloudflare Pages (Git) instead: no wrangler deploy step — set build output to `.svelte-kit/cloudflare` only.
 
-name = "hashfox-frontend"
+name = "hashfox-app"
+main = ".svelte-kit/cloudflare/_worker.js"
 compatibility_date = "2025-04-01"
-pages_build_output_dir = ".svelte-kit/cloudflare"
+compatibility_flags = ["nodejs_als", "nodejs_compat"]
+
+[assets]
+binding = "ASSETS"
+directory = ".svelte-kit/cloudflare"
