@@ -1,0 +1,8 @@
+# HashFox frontend — Cloudflare Pages (SvelteKit + adapter-cloudflare).
+# Dashboard: connect repo, set root directory to `frontend`, build `npm run build`,
+# output directory `.svelte-kit/cloudflare`, Node 20+.
+# CLI: cd frontend && npm run build && npx wrangler pages deploy .svelte-kit/cloudflare --project-name=YOUR_PROJECT
+
+name = "hashfox-frontend"
+compatibility_date = "2025-04-01"
+pages_build_output_dir = ".svelte-kit/cloudflare"
