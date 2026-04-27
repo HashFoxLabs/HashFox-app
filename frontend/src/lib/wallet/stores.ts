@@ -1,14 +1,9 @@
+import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import type { Adapter, WalletName, SignerWalletAdapter } from '@solana/wallet-adapter-base';
 import { MAGICBLOCK_RPC } from '$lib/env';
 import { fetchProfile } from '$lib/supabase';
-import {
-	connectWeb3Auth,
-	disconnectWeb3Auth,
-	createWeb3AuthWalletAdapter
-} from './web3auth';
 
 export const EMBEDDED_WALLET_NAME = 'Web3Auth';
 
@@ -49,6 +44,17 @@ export function setWalletUsername(username: string) {
 
 export const connectionStore = writable<Connection | null>(null);
 
+let extensionWalletsReady: Promise<void> | null = null;
+
+/** Loads Phantom/Solflare only in the browser (skipped on Cloudflare SSR / Workers). */
+export function registerBrowserWalletAdapters(): Promise<void> {
+	if (!browser) return Promise.resolve();
+	if (!extensionWalletsReady) {
+		extensionWalletsReady = walletManager.installExtensionWallets();
+	}
+	return extensionWalletsReady;
+}
+
 class WalletManager {
 	private connection: Connection;
 	private wallets: Adapter[] = [];
@@ -58,7 +64,18 @@ class WalletManager {
 		const endpoint = MAGICBLOCK_RPC;
 		this.connection = new Connection(endpoint, 'confirmed');
 		connectionStore.set(this.connection);
+	}
+
+	async installExtensionWallets(): Promise<void> {
+		if (!browser || this.wallets.length > 0) return;
+		const { PhantomWalletAdapter, SolflareWalletAdapter } = await import('@solana/wallet-adapter-wallets');
 		this.wallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
+	}
+
+	private async ensureExtensionWallets(): Promise<void> {
+		if (!browser) return;
+		if (this.wallets.length > 0) return;
+		await registerBrowserWalletAdapters();
 	}
 
 	getWallets() {
@@ -71,6 +88,8 @@ class WalletManager {
 		}
 
 		try {
+			await this.ensureExtensionWallets();
+
 			walletStore.update((state) => ({ ...state, connecting: true }));
 
 			let adapter: Adapter;
@@ -80,6 +99,10 @@ class WalletManager {
 				adapter = found;
 			} else {
 				adapter = this.wallets.find((w) => w.name === 'Phantom') || this.wallets[0];
+			}
+
+			if (!adapter) {
+				throw new Error('Browser wallets are not ready yet. Please try again.');
 			}
 
 			if (adapter.readyState === 'NotDetected') {
@@ -182,6 +205,7 @@ class WalletManager {
 				await this.disconnect();
 			}
 
+			const { connectWeb3Auth, createWeb3AuthWalletAdapter } = await import('./web3auth');
 			const result = await connectWeb3Auth();
 			if (!result) {
 				walletStore.update((state) => ({ ...state, connecting: false }));
@@ -216,6 +240,7 @@ class WalletManager {
 		if (!this.selectedWallet) return;
 		try {
 			if (this.selectedWallet.name === EMBEDDED_WALLET_NAME) {
+				const { disconnectWeb3Auth } = await import('./web3auth');
 				await disconnectWeb3Auth();
 				walletStore.update((state) => ({
 					...state,

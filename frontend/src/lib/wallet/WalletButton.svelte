@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { walletStore, walletManager } from './stores';
+	import { walletStore, walletManager, registerBrowserWalletAdapters } from './stores';
 	import { WEB3AUTH_CLIENT_ID } from '$lib/env';
-	import { initWeb3Auth } from './web3auth';
 	import WalletModal from './WalletModal.svelte';
 	import ProfileChip from '../profile/ProfileChip.svelte';
 
@@ -14,13 +13,15 @@
 		walletState = state;
 	});
 
-	onMount(() => {
+	onMount(async () => {
+		await registerBrowserWalletAdapters();
 		wallets = walletManager.getWallets();
 		// Prevent "reconnect" loops on route changes (TopChrome remounts).
 		if (!walletState.connected) {
-			walletManager.autoConnect();
+			void walletManager.autoConnect();
 		}
 		if (WEB3AUTH_CLIENT_ID) {
+			const { initWeb3Auth } = await import('./web3auth');
 			void initWeb3Auth();
 		}
 	});
