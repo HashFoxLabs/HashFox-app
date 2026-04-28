@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { SYNTHESIS_API_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 
 const SYNTHESIS_API_BASE = 'https://synthesis.trade/api/v1';
@@ -28,6 +28,7 @@ function normalizeTags(raw: string): string {
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
+		const SYNTHESIS_API_KEY = env.SYNTHESIS_API_KEY;
 		if (!SYNTHESIS_API_KEY) {
 			return json({ error: 'SYNTHESIS_API_KEY not configured' }, { status: 500 });
 		}
