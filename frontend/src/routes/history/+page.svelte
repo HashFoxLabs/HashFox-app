@@ -191,46 +191,9 @@
 		return `${date} · ${time}`;
 	}
 
-	/**
-	 * Mark from Pyth (same source as terminal Open Orders). When History holds an
-	 * open crypto/stock position we also wire Binance/Alpaca so depth/poll ticks
-	 * re-render the page — terminal gets that for free from the chart orderbook.
-	 */
-	function liveMarkUsd(t: TradingPositionAccount): number {
-		const symbol = tradingSymbol(t);
-		const cat = tradingCategory(t);
-		/* Establish reactive deps on L1 books so uPnL updates every tick like the terminal. */
-		if (cat === 'crypto' && streamCryptoSym === symbol) {
-			void binanceBook.asks;
-			void binanceBook.bids;
-		} else if ((cat === 'stock' || cat === 'equity') && streamStockSym === symbol) {
-			void stocksBook.asks;
-			void stocksBook.bids;
-		}
-		return prices[symbol]?.price ?? 0;
-	}
-
-	/** Compute live unrealized PnL for an active trading position. Returns null
-	 * when no live mark price is available (e.g. limit not filled, or feed
-	 * missing). */
-	function liveTradingPnl(t: TradingPositionAccount):
-		| { pnl: number; markPrice: number; pct: number }
-		| null {
-		const status = variantKey(t.status);
-		if (status !== 'active') return null;
-		const mark = liveMarkUsd(t);
-		const entry = rawNum(t.entryPrice) / PRICE_SCALE;
-		const sizeUsd = rawNum(t.sizeUsd) / USD_SCALE;
-		const margin = rawNum(t.marginUsd) / USD_SCALE;
-		if (!mark || !entry || !sizeUsd) return null;
-		const dir = variantKey(t.direction);
-		const raw =
-			dir === 'long'
-				? ((mark - entry) / entry) * sizeUsd
-				: ((entry - mark) / entry) * sizeUsd;
-		const pct = margin > 0 ? (raw / margin) * 100 : 0;
-		return { pnl: raw, markPrice: mark, pct };
-	}
+	/* Mark from Pyth — same source as terminal Open Orders. Looked up directly
+	 * inside the template @const so Svelte tracks `prices` as a reactive dep
+	 * and re-renders on every Pyth tick. */
 
 	function buildTradeRuntime(): {
 		program: any;
@@ -350,7 +313,7 @@
 				actionMessage = `Cancelled #${positionId.toString()}`;
 			} else {
 				const symbol = tradingSymbol(t);
-				const mark = liveMarkUsd(t);
+				const mark = prices[symbol]?.price ?? 0;
 				if (!mark) {
 					actionMessage = `No live price for ${symbol} — try again in a moment.`;
 					closingPubkey = '';
@@ -400,8 +363,16 @@
 	 * "Open positions" header pill. */
 	$: totalLivePnl = openEntries.reduce((sum, e) => {
 		if (e.kind !== 'trading') return sum;
-		const live = liveTradingPnl(e.data as TradingPositionAccount);
-		return sum + (live?.pnl ?? 0);
+		const t = e.data as TradingPositionAccount;
+		if (variantKey(t.status) !== 'active') return sum;
+		const symbol = tradingSymbol(t);
+		const mark = prices[symbol]?.price ?? 0;
+		const entry = rawNum(t.entryPrice) / PRICE_SCALE;
+		const sizeUsd = rawNum(t.sizeUsd) / USD_SCALE;
+		if (!mark || !entry || !sizeUsd) return sum;
+		const dir = variantKey(t.direction);
+		const raw = dir === 'long' ? ((mark - entry) / entry) * sizeUsd : ((entry - mark) / entry) * sizeUsd;
+		return sum + raw;
 	}, 0);
 
 	/* Keep Binance / Alpaca streams open on History when there are open positions,
@@ -510,7 +481,7 @@
 									{@const otype = variantKey(t.orderType)}
 									{@const symbol = tradingSymbol(t)}
 									{@const cat = tradingCategory(t)}
-									{@const live = liveTradingPnl(t)}
+									{@const markPrice = prices[symbol]?.price ?? 0}
 									{@const entryPx = rawNum(t.entryPrice) / PRICE_SCALE}
 									{@const limitPx = rawNum(t.limitPrice) / PRICE_SCALE}
 									{@const tpPx = rawNum(t.takeProfitPrice) / PRICE_SCALE}
@@ -518,6 +489,14 @@
 									{@const liqPx = rawNum(t.liquidationPrice) / PRICE_SCALE}
 									{@const sizeUsd = rawNum(t.sizeUsd) / USD_SCALE}
 									{@const marginUsd = rawNum(t.marginUsd) / USD_SCALE}
+									{@const isActive = status === 'active' && markPrice > 0 && entryPx > 0 && sizeUsd > 0}
+									{@const livePnl =
+										isActive
+											? dir === 'long'
+												? ((markPrice - entryPx) / entryPx) * sizeUsd
+												: ((entryPx - markPrice) / entryPx) * sizeUsd
+											: 0}
+									{@const livePct = isActive && marginUsd > 0 ? (livePnl / marginUsd) * 100 : 0}
 									{@const sizeTokens =
 										entryPx > 0 ? sizeUsd / entryPx : limitPx > 0 ? sizeUsd / limitPx : 0}
 
@@ -575,7 +554,7 @@
 											<div class="cell">
 												<span class="k">Current</span>
 												<span class="v">
-													{live ? '$' + live.markPrice.toFixed(2) : '—'}
+													{markPrice > 0 ? '$' + markPrice.toFixed(2) : '—'}
 												</span>
 											</div>
 											<div class="cell">
@@ -594,20 +573,20 @@
 											</div>
 											<div class="cell pnl-cell">
 												<span class="k">Pending PnL</span>
-												{#if live}
+												{#if isActive}
 													<span
 														class="v big"
-														class:up={live.pnl >= 0}
-														class:down={live.pnl < 0}
+														class:up={livePnl >= 0}
+														class:down={livePnl < 0}
 													>
-														{fmtNum(live.pnl)} USDT
+														{fmtNum(livePnl)} USDT
 													</span>
 													<span
 														class="sub"
-														class:up={live.pct >= 0}
-														class:down={live.pct < 0}
+														class:up={livePct >= 0}
+														class:down={livePct < 0}
 													>
-														{fmtNum(live.pct)}% on margin
+														{fmtNum(livePct)}% on margin
 													</span>
 												{:else}
 													<span class="v soft">—</span>
