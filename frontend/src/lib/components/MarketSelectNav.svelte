@@ -167,6 +167,7 @@
 		padding: 5px 10px;
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		transition: border-color 0.15s ease;
 		min-width: 200px;
 	}

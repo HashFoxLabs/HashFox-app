@@ -847,6 +847,7 @@
 		font-size: 14px;
 		padding: 5px 11px;
 		border: 1px solid transparent;
+		border-radius: 6px;
 		transition: all 0.2s;
 		flex-shrink: 0;
 		white-space: nowrap;
@@ -869,6 +870,7 @@
 		padding: var(--nav-pad-y) var(--nav-pad-x);
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		flex: 0 0 auto;
 		min-width: max-content;
 		line-height: 1.25;
@@ -884,6 +886,7 @@
 		color: #ff5a00;
 		background: #000;
 		border: 1px solid #ff5a00;
+		border-radius: 6px;
 		text-decoration: none;
 		font-family: 'Courier New', monospace;
 		font-size: var(--nav-fs);
@@ -908,6 +911,7 @@
 		background: #ff5a00;
 		color: #000;
 		border: none;
+		border-radius: 6px;
 		padding: var(--nav-pad-y) 12px;
 		font-size: var(--nav-label-fs);
 		font-weight: bold;

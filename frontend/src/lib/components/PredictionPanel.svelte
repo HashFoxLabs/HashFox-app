@@ -160,6 +160,7 @@
 	.event-list {
 		background: #121212;
 		border: 1px solid #222;
+		border-radius: 10px;
 		max-height: 620px;
 		overflow-y: auto;
 	}
@@ -197,6 +198,7 @@
 	.event-detail {
 		background: #121212;
 		border: 1px solid #222;
+		border-radius: 10px;
 		padding: 20px;
 		color: #ccc;
 		font-family: 'Courier New', monospace;
@@ -210,6 +212,7 @@
 		padding: 14px;
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 8px;
 		color: #ccc;
 		font-family: inherit;
 		cursor: pointer;
@@ -226,6 +229,7 @@
 	.field input {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #fff;
 		padding: 10px 12px;
 		font-family: inherit;
@@ -238,6 +242,7 @@
 		width: 100%;
 		padding: 13px;
 		border: none;
+		border-radius: 8px;
 		font-family: inherit;
 		font-size: 13px;
 		font-weight: bold;
@@ -248,7 +253,7 @@
 	.submit.no { background: #ff4444; color: #fff; }
 	.submit:disabled { opacity: 0.6; cursor: not-allowed; }
 
-	.msg { margin-top: 12px; padding: 8px 10px; background: #0a0a0a; border: 1px solid #222; font-size: 11px; }
+	.msg { margin-top: 12px; padding: 8px 10px; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; font-size: 11px; }
 
 	.placeholder { padding: 2rem 1rem; text-align: center; color: #666; font-family: 'Courier New', monospace; font-size: 12px; }
 

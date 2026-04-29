@@ -855,6 +855,7 @@
 	.fbtn {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 12px;
 		font-family: inherit;
@@ -876,6 +877,7 @@
 	.refresh {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #ccc;
 		padding: 6px 12px;
 		font-family: inherit;
@@ -894,6 +896,7 @@
 		font-size: 12px;
 		background: #121212;
 		border: 1px solid #222;
+		border-radius: 10px;
 	}
 	.placeholder.err { color: #ff6b6b; }
 
@@ -939,6 +942,7 @@
 		font-weight: bold;
 		padding: 4px 10px;
 		border: 1px solid;
+		border-radius: 999px;
 		letter-spacing: 0.06em;
 	}
 	.pnl-pill.up { color: #00ff64; border-color: rgba(0, 255, 100, 0.4); background: rgba(0, 255, 100, 0.05); }
@@ -954,6 +958,7 @@
 		background: linear-gradient(180deg, #141414 0%, #101010 100%);
 		border: 1px solid #222;
 		border-left: 2px solid #333;
+		border-radius: 10px;
 		padding: 12px 14px;
 		display: flex;
 		flex-direction: column;
@@ -985,6 +990,7 @@
 	.close-btn {
 		background: transparent;
 		border: 1px solid #ff4444;
+		border-radius: 6px;
 		color: #ff4444;
 		padding: 5px 14px;
 		font-family: inherit;
@@ -1021,6 +1027,7 @@
 		min-width: 0;
 		background: #0a0a0a;
 		border: 1px solid #2a2a2a;
+		border-radius: 6px;
 		color: #ececec;
 		font-family: inherit;
 		font-size: 12px;
@@ -1031,6 +1038,7 @@
 	.sell-row .max-btn {
 		background: transparent;
 		border: 1px solid #2a2a2a;
+		border-radius: 6px;
 		color: #b0b0b0;
 		padding: 5px 10px;
 		font-family: inherit;
@@ -1043,6 +1051,7 @@
 	.sell-row .sell-btn {
 		background: transparent;
 		border: 1px solid #ff4444;
+		border-radius: 6px;
 		color: #ff4444;
 		padding: 6px 16px;
 		font-family: inherit;
@@ -1167,6 +1176,7 @@
 		font-weight: bold;
 		letter-spacing: 0.08em;
 		border: 1px solid #2a2a2a;
+		border-radius: 4px;
 		color: #b0b0b0;
 	}
 	.mode-badge.alt { color: #ff5a00; border-color: rgba(255, 90, 0, 0.3); }
@@ -1218,7 +1228,7 @@
 	}
 
 	/* ===== History table ===== */
-	.table { background: #121212; border: 1px solid #222; }
+	.table { background: #121212; border: 1px solid #222; border-radius: 10px; overflow: hidden; }
 	.row {
 		display: grid;
 		grid-template-columns:

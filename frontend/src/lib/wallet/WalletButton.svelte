@@ -125,7 +125,7 @@
 		font-weight: bold;
 		letter-spacing: 0.18em;
 		cursor: pointer;
-		border-radius: 3px;
+		border-radius: 6px;
 		transition: all 0.15s ease;
 		display: flex;
 		align-items: center;
@@ -154,7 +154,7 @@
 		gap: 10px;
 		background: #0a0a0a;
 		border: 1px solid #222;
-		border-radius: 3px;
+		border-radius: 6px;
 		padding: 5px 10px 5px 6px;
 	}
 	.wallet-info {
@@ -189,7 +189,7 @@
 		font-family: 'Courier New', monospace;
 		font-size: 11px;
 		cursor: pointer;
-		border-radius: 3px;
+		border-radius: 6px;
 		transition: all 0.15s ease;
 	}
 	.disconnect-button:hover {

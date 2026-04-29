@@ -215,6 +215,7 @@
 	.panel {
 		background: #121212;
 		border: 1px solid #222;
+		border-radius: 10px;
 		padding: 16px;
 		color: #ccc;
 		font-family: 'Courier New', monospace;
@@ -240,6 +241,7 @@
 	.tab {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #888;
 		padding: 5px 12px;
 		font-family: inherit;
@@ -255,6 +257,7 @@
 		flex: 1;
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #666;
 		padding: 8px;
 		font-family: inherit;
@@ -280,6 +283,7 @@
 	.field input {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #fff;
 		padding: 8px 10px;
 		font-family: inherit;
@@ -294,6 +298,7 @@
 	.lev {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #888;
 		padding: 5px 9px;
 		font-family: inherit;
@@ -311,6 +316,7 @@
 		letter-spacing: 0.08em;
 		cursor: pointer;
 		border: none;
+		border-radius: 8px;
 		margin-top: 6px;
 	}
 	.submit.long { background: #00ff64; color: #000; }
@@ -322,6 +328,7 @@
 		padding: 8px 10px;
 		background: #0a0a0a;
 		border: 1px solid #222;
+		border-radius: 8px;
 		color: #ccc;
 		font-size: 11px;
 	}

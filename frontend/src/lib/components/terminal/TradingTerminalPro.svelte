@@ -1419,6 +1419,7 @@
 	.cv-btn {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 4px 10px;
 		font-family: inherit;
@@ -1583,6 +1584,7 @@
 	.hl-ot {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 7px 0;
 		font-family: inherit;
@@ -1632,6 +1634,7 @@
 	.hl-input, .hl-input-full {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #fff;
 		padding: 8px 10px;
 		font-family: inherit;
@@ -1647,6 +1650,7 @@
 	.hl-unit-select {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #e8e8e8;
 		padding: 8px 10px;
 		font-family: inherit;
@@ -1658,6 +1662,7 @@
 	.hl-pct-btn {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 0;
 		font-family: inherit;
@@ -1672,6 +1677,7 @@
 	.hl-lev-btn {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 0;
 		font-family: inherit;
@@ -1751,6 +1757,7 @@
 	.dock-tab-btn {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 12px;
 		font-family: inherit;
@@ -1773,6 +1780,7 @@
 	.chart-positions-refresh {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #ccc;
 		padding: 5px 10px;
 		font-family: inherit;
@@ -1834,6 +1842,7 @@
 	.cp-action {
 		background: #000;
 		border: 1px solid #ff4444;
+		border-radius: 6px;
 		color: #ff4444;
 		padding: 6px 10px;
 		font-family: inherit;
@@ -1897,6 +1906,7 @@
 	.hr-sell {
 		background: #000;
 		border: 1px solid #ff4444;
+		border-radius: 6px;
 		color: #ff4444;
 		padding: 6px 10px;
 		font-family: inherit;

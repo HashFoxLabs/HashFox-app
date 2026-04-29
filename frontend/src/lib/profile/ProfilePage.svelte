@@ -390,6 +390,7 @@
 	.tab {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 12px;
 		font-family: inherit;
@@ -509,6 +510,7 @@
 	.card {
 		background: #121212;
 		border: 1px solid #222;
+		border-radius: 10px;
 		margin-top: 12px;
 		overflow: hidden;
 	}

@@ -65,7 +65,7 @@
 		gap: 10px;
 		background: #0a0a0a;
 		border: 1px solid #222;
-		border-radius: 3px;
+		border-radius: 6px;
 		padding: 5px 8px 5px 6px;
 		min-width: 190px;
 	}
@@ -130,7 +130,7 @@
 		font-weight: bold;
 		letter-spacing: 0.18em;
 		cursor: pointer;
-		border-radius: 3px;
+		border-radius: 6px;
 		transition: all 0.15s ease;
 	}
 	.profile-btn:hover {

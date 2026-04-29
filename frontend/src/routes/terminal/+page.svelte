@@ -89,6 +89,7 @@
 	.cat {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 7px 16px;
 		font-family: inherit;

@@ -281,6 +281,7 @@
 	.iv {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 10px;
 		font-family: 'Courier New', monospace;
