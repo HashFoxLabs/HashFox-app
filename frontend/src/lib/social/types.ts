@@ -40,6 +40,15 @@ export interface SharedTrade {
 	stopLoss?: number;
 	status?: string;
 	platform?: string;
+	positionKey?: string;
+	tradeMode?: 'spot' | 'perp' | 'prediction' | string;
+	orderType?: 'market' | 'limit' | string;
+	leverage?: number;
+	marginUsd?: number;
+	liquidationPrice?: number;
+	closePrice?: number;
+	closedAt?: string;
+	realizedPnl?: number;
 	winningTrades?: number;
 	losingTrades?: number;
 	entryType?: string;
@@ -98,11 +107,11 @@ export interface ConnectedSocialUser {
 }
 
 const PAIR_SYMBOLS: Record<number, string> = {
-	0: 'SOL/USDT',
-	1: 'BTC/USDT',
-	2: 'ETH/USDT',
-	3: 'AVAX/USDT',
-	4: 'LINK/USDT'
+	0: 'BTC/USDT',
+	1: 'ETH/USDT',
+	2: 'BNB/USDT',
+	3: 'SOL/USDT',
+	4: 'XRP/USDT'
 };
 
 export async function fetchPublishedFeed(): Promise<SharedTrade[]> {
@@ -112,9 +121,9 @@ export async function fetchPublishedFeed(): Promise<SharedTrade[]> {
 		sb
 			.from('trades')
 			.select(
-				'id, user_id, source, position_type, entry_price, exit_price, amount, pnl, market_id, market_title, pair_index, analysis, is_published, likes_count, comments_count, created_at, take_profit_price, stop_loss_price, status, platform, users(username, avatar_url)'
+				'id, user_id, source, position_type, entry_price, exit_price, amount, pnl, market_id, market_title, pair_index, analysis, is_published, likes_count, comments_count, created_at, take_profit_price, stop_loss_price, status, platform, trade_mode, order_type, leverage, margin_usd, liquidation_price, close_price, closed_at, realized_pnl, users(username, avatar_url)'
 			)
-			.eq('is_published', true)
+			.or('posted.eq.true,is_published.eq.true')
 			.order('created_at', { ascending: false })
 			.limit(50),
 		sb
@@ -133,10 +142,24 @@ export async function fetchPublishedFeed(): Promise<SharedTrade[]> {
 
 	for (const t of trades as any[]) {
 		const isBlockberg = t.source === 'blockberg';
-		const symbol =
-			isBlockberg && t.pair_index != null
-				? PAIR_SYMBOLS[t.pair_index] || 'UNKNOWN'
-				: t.market_title || t.market_id || 'Market';
+		const isTraditional = t.source === 'traditional';
+		const isPolymarket = t.source === 'polymarket';
+		// market_title is stored as the bare symbol (e.g. "BTC"); for crypto
+		// surface it as the trading pair "BTC/USDT". Legacy rows fall back to
+		// the pair-index lookup which is already in pair form.
+		const rawTitle = t.market_title || null;
+		let symbol: string;
+		if (isBlockberg) {
+			if (rawTitle) {
+				symbol = rawTitle.includes('/') ? rawTitle : `${rawTitle}/USDT`;
+			} else if (t.pair_index != null) {
+				symbol = PAIR_SYMBOLS[t.pair_index] || 'UNKNOWN';
+			} else {
+				symbol = 'UNKNOWN';
+			}
+		} else {
+			symbol = rawTitle || t.market_id || 'Market';
+		}
 		const posType = (t.position_type || '').toLowerCase();
 		const direction: TradeDirection =
 			posType === 'long' || posType === 'short' || posType === 'yes' || posType === 'no'
@@ -145,7 +168,21 @@ export async function fetchPublishedFeed(): Promise<SharedTrade[]> {
 		const entry = Number(t.entry_price) || 0;
 		const exit = t.exit_price != null ? Number(t.exit_price) : null;
 		const pnl = Number(t.pnl) || 0;
-		const pnlPct = entry > 0 && exit != null ? ((exit - entry) / entry) * 100 : 0;
+		const margin = t.margin_usd != null ? Number(t.margin_usd) : null;
+		// Prefer realized return on margin for perps; fall back to price change for spot/prediction.
+		const pnlPct =
+			margin && margin > 0
+				? (pnl / margin) * 100
+				: entry > 0 && exit != null
+					? ((exit - entry) / entry) * 100
+					: 0;
+		const marketType: MarketType = isPolymarket
+			? 'prediction'
+			: isBlockberg
+				? 'crypto'
+				: isTraditional
+					? 'stocks'
+					: 'crypto';
 
 		items.push({
 			id: `db-trade-${t.id}`,
@@ -155,7 +192,7 @@ export async function fetchPublishedFeed(): Promise<SharedTrade[]> {
 			authorUserId: t.user_id,
 			username: t.users?.username || 'anon',
 			avatarUrl: t.users?.avatar_url || undefined,
-			marketType: isBlockberg ? 'crypto' : 'prediction',
+			marketType,
 			tradeType: 'paper-trade',
 			asset: symbol,
 			direction,
@@ -173,7 +210,16 @@ export async function fetchPublishedFeed(): Promise<SharedTrade[]> {
 			takeProfit: t.take_profit_price != null ? Number(t.take_profit_price) : undefined,
 			stopLoss: t.stop_loss_price != null ? Number(t.stop_loss_price) : undefined,
 			status: t.status || undefined,
-			platform: t.platform || t.source || undefined
+			platform: t.platform || t.source || undefined,
+			tradeMode: t.trade_mode || undefined,
+			orderType: t.order_type || undefined,
+			leverage: t.leverage != null ? Number(t.leverage) : undefined,
+			marginUsd: margin ?? undefined,
+			liquidationPrice:
+				t.liquidation_price != null ? Number(t.liquidation_price) : undefined,
+			closePrice: t.close_price != null ? Number(t.close_price) : undefined,
+			closedAt: t.closed_at || undefined,
+			realizedPnl: t.realized_pnl != null ? Number(t.realized_pnl) : undefined
 		});
 	}
 

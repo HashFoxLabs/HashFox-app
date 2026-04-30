@@ -56,6 +56,7 @@
 		connectStocks,
 		disconnectStocks
 	} from '$lib/stores/stocksOrderbook';
+	import { syncClosedTradingPositions } from '$lib/social/syncClosedTrades';
 
 	/** Which category this terminal serves. */
 	export let category: MarketCategory = 'crypto';
@@ -497,6 +498,10 @@
 				balance = await hashfoxClient.getBalanceBreakdown();
 				setUserBalance(balance);
 				positions = await hashfoxClient.fetchTradingPositions();
+				const addr = wallet.publicKey?.toBase58?.();
+				if (addr && positions.length > 0) {
+					void syncClosedTradingPositions(addr, positions);
+				}
 			} else {
 				balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
 				clearUserBalance();

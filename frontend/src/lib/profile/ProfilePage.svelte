@@ -7,6 +7,7 @@
 		updateBanner,
 		fetchPostedTrades,
 		fetchPostedStrategies,
+		unpostTrade,
 		type PostedTrade,
 		type PostedStrategy
 	} from '$lib/supabase';
@@ -48,11 +49,11 @@
 	}
 
 	const BLOCKBERG_PAIR_SYMBOLS: Record<number, string> = {
-		0: 'SOL/USDT',
-		1: 'BTC/USDT',
-		2: 'ETH/USDT',
-		3: 'AVAX/USDT',
-		4: 'LINK/USDT'
+		0: 'BTC/USDT',
+		1: 'ETH/USDT',
+		2: 'BNB/USDT',
+		3: 'SOL/USDT',
+		4: 'XRP/USDT'
 	};
 
 	async function loadProfile() {
@@ -71,8 +72,10 @@
 		postsError = '';
 		try {
 			const [t, s] = await Promise.all([fetchPostedTrades(addr), fetchPostedStrategies(addr)]);
-			postedTrades = t;
-			postedStrategies = s;
+			// Profile shows only what the user explicitly posted to the community,
+			// not every closed trade we auto-sync to Supabase.
+			postedTrades = t.filter((row) => row.posted === true || row.is_published === true);
+			postedStrategies = s.filter((row) => row.is_published === true);
 		} catch (err: any) {
 			postsError = err?.message ?? 'Failed to load posts';
 		} finally {
@@ -88,11 +91,18 @@
 
 	function mapTrade(t: PostedTrade): SharedTrade {
 		const isBlockberg = (t.source || '').toLowerCase().includes('blockberg');
-		const pair =
-			isBlockberg && t.pair_index !== null && t.pair_index !== undefined
-				? BLOCKBERG_PAIR_SYMBOLS[t.pair_index] || `PAIR #${t.pair_index}`
-				: null;
-		const asset = pair || t.market_title || t.market_id || 'Market';
+		// Prefer the stored canonical title; for crypto rows append /USDT if it's
+		// a bare ticker. Fall back to the pair-index lookup for legacy rows.
+		const rawTitle = t.market_title || null;
+		let asset: string;
+		if (isBlockberg) {
+			if (rawTitle) asset = rawTitle.includes('/') ? rawTitle : `${rawTitle}/USDT`;
+			else if (t.pair_index !== null && t.pair_index !== undefined)
+				asset = BLOCKBERG_PAIR_SYMBOLS[t.pair_index] || `PAIR #${t.pair_index}`;
+			else asset = t.market_id || 'Market';
+		} else {
+			asset = rawTitle || t.market_id || 'Market';
+		}
 		const posType = (t.position_type || '').toLowerCase();
 		const direction: TradeDirection =
 			posType === 'long' || posType === 'short' || posType === 'yes' || posType === 'no'
@@ -101,16 +111,34 @@
 		const entry = num(t.entry_price) ?? 0;
 		const exit = num(t.exit_price);
 		const pnl = num(t.pnl) ?? 0;
-		const pnlPct = entry > 0 && exit !== undefined ? ((exit - entry) / entry) * 100 : 0;
+		const margin = num(t.margin_usd);
+		// Prefer return-on-margin for perps (so a small price move on a 3× position
+		// shows the levered % the user actually realized); fall back to price change.
+		const pnlPct =
+			margin && margin > 0
+				? (pnl / margin) * 100
+				: entry > 0 && exit !== undefined
+					? ((exit - entry) / entry) * 100
+					: 0;
+		const isPolymarket = (t.source || '').toLowerCase() === 'polymarket';
+		const isTraditional = (t.source || '').toLowerCase() === 'traditional';
+		const marketType: MarketType = isPolymarket
+			? 'prediction'
+			: isBlockberg
+				? 'crypto'
+				: isTraditional
+					? 'stocks'
+					: 'crypto';
 		return {
 			id: `profile-trade-${t.id}`,
 			dbId: t.id,
+			positionKey: t.position_key ?? undefined,
 			isFromDb: true,
 			dbType: 'trade',
 			authorUserId: t.user_id ?? undefined,
 			username: profileUsername || short(walletAddress()),
 			avatarUrl: profileAvatarUrl || undefined,
-			marketType: (isBlockberg ? 'crypto' : 'prediction') as MarketType,
+			marketType,
 			tradeType: 'paper-trade',
 			asset,
 			direction,
@@ -127,7 +155,15 @@
 			takeProfit: num(t.take_profit_price),
 			stopLoss: num(t.stop_loss_price),
 			status: t.status || undefined,
-			platform: t.platform || t.source || undefined
+			platform: t.platform || t.source || undefined,
+			tradeMode: t.trade_mode || undefined,
+			orderType: t.order_type || undefined,
+			leverage: t.leverage != null ? Number(t.leverage) : undefined,
+			marginUsd: margin ?? undefined,
+			liquidationPrice: t.liquidation_price != null ? Number(t.liquidation_price) : undefined,
+			closePrice: t.close_price != null ? Number(t.close_price) : undefined,
+			closedAt: t.closed_at || undefined,
+			realizedPnl: t.realized_pnl != null ? Number(t.realized_pnl) : undefined
 		};
 	}
 
@@ -190,6 +226,21 @@
 			executionTime: s.execution_time ?? undefined,
 			strategyConfig: s.backtest_data?.strategyConfig || undefined
 		};
+	}
+
+	async function handleUnpostTrade(item: SharedTrade) {
+		const addr = walletAddress();
+		if (!addr || !item.dbId) return;
+		const res = await unpostTrade(addr, {
+			tradeId: item.dbId,
+			positionKey: item.positionKey ?? null
+		});
+		if (!res.ok) {
+			alert(res.error || 'Failed to remove post.');
+			return;
+		}
+		// Drop locally so the list re-renders without a refetch round-trip.
+		postedTrades = postedTrades.filter((t) => t.id !== item.dbId);
 	}
 
 	async function handleAvatarUpload(e: Event) {
@@ -359,7 +410,11 @@
 				{:else}
 					<div class="posts">
 						{#each feed as item (item.id)}
-							<SocialPostCard trade={item} readonly={true} />
+							<SocialPostCard
+								trade={item}
+								readonly={true}
+								onUnpost={item.dbType === 'trade' ? handleUnpostTrade : null}
+							/>
 						{/each}
 					</div>
 				{/if}

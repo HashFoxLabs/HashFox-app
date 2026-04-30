@@ -41,6 +41,16 @@
 		getAllRememberedMarketNames,
 		rememberPredictionMarketName
 	} from '$lib/stores/predictionMarketNames';
+	import {
+		fetchPostedStateByPositionKeys,
+		markTradePosted,
+		unpostTrade,
+		upsertClosedTrade
+	} from '$lib/supabase';
+	import {
+		tradingPositionKey,
+		predictionPositionKey
+	} from '$lib/social/syncClosedTrades';
 
 	let wallet: any = {};
 	walletStore.subscribe((s) => (wallet = s));
@@ -65,6 +75,12 @@
 	let actionMessage = '';
 	let closingPubkey = '';
 	let sellingPubkey = '';
+	let postingPubkey = '';
+	let postedByPositionKey: Record<string, boolean> = {};
+	let postModalOpen = false;
+	let postModalEntry: HistoryEntry | null = null;
+	let postComment = '';
+	let postError = '';
 	let predMeta: Record<string, { question: string; yesPrice: number; noPrice: number }> = {};
 	let sellQty: Record<string, number> = {};
 
@@ -83,6 +99,7 @@
 			const conn = buildConnection();
 			const program = buildProgram(conn, wallet.adapter);
 			entries = (await fetchUnifiedHistory(program, wallet.publicKey)) as unknown as HistoryEntry[];
+			await syncClosedTradesToSupabase(entries);
 			void loadPredictionMeta();
 		} catch (err: any) {
 			error = err?.message ?? 'Failed to load history';
@@ -189,6 +206,181 @@
 		const date = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 		const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 		return `${date} · ${time}`;
+	}
+
+	function walletAddress(): string {
+		return wallet?.publicKey?.toBase58?.() ?? '';
+	}
+
+	function toIsoFromSeconds(ts: number): string | null {
+		if (!ts || Number.isNaN(ts)) return null;
+		return new Date(ts * 1000).toISOString();
+	}
+
+	function positionKeyForEntry(e: HistoryEntry): string {
+		if (e.kind === 'trading') {
+			const t = e.data as TradingPositionAccount;
+			return tradingPositionKey(rawNum(t.positionId));
+		}
+		const p = e.data as PredictionPositionAccount;
+		return predictionPositionKey(rawNum(p.positionId));
+	}
+
+async function syncClosedTradesToSupabase(list: HistoryEntry[]) {
+		const addr = walletAddress();
+		if (!addr) return;
+		const closed = list.filter((e) => !isOpenEntry(e));
+		if (closed.length === 0) return;
+
+		await Promise.all(
+			closed.map(async (e) => {
+				const key = positionKeyForEntry(e);
+				if (e.kind === 'trading') {
+					const t = e.data as TradingPositionAccount;
+					const dir = variantKey(t.direction);
+					const source = tradingCategory(t) === 'crypto' ? 'blockberg' : 'traditional';
+					const market = tradingSymbol(t);
+					const tmode = variantKey(t.tradeMode);
+					const otype = variantKey(t.orderType);
+					const closePx = rawNum(t.closePrice) / PRICE_SCALE;
+					const liqPx = rawNum(t.liquidationPrice) / PRICE_SCALE;
+					const tpPx = rawNum(t.takeProfitPrice) / PRICE_SCALE;
+					const slPx = rawNum(t.stopLossPrice) / PRICE_SCALE;
+					const realizedPnl = rawNum(t.realizedPnl) / USD_SCALE;
+					const closedAt = rawNum(t.closedAt);
+					const res = await upsertClosedTrade(addr, {
+						positionKey: key,
+						source,
+						positionType: dir || 'long',
+						entryPrice: rawNum(t.entryPrice) / PRICE_SCALE,
+						exitPrice: closePx > 0 ? closePx : null,
+						amount: rawNum(t.sizeUsd) / USD_SCALE,
+						pnl: realizedPnl,
+						marketId: market,
+						marketTitle: market,
+						pairIndex: t.pairIndex,
+						platform: source,
+						status: variantKey(t.status),
+						openedAtIso: toIsoFromSeconds(e.openedAt),
+						takeProfitPrice: tpPx > 0 ? tpPx : null,
+						stopLossPrice: slPx > 0 ? slPx : null,
+						tradeMode: tmode || null,
+						orderType: otype || null,
+						leverage: tmode === 'perp' ? t.leverage : null,
+						marginUsd: rawNum(t.marginUsd) / USD_SCALE,
+						liquidationPrice: tmode === 'perp' && liqPx > 0 ? liqPx : null,
+						closePrice: closePx > 0 ? closePx : null,
+						closedAtIso: closedAt > 0 ? toIsoFromSeconds(closedAt) : null,
+						realizedPnl
+					});
+					if (!res.ok) console.warn('[history] failed to sync closed trading trade', res.error);
+					return;
+				}
+
+				const p = e.data as PredictionPositionAccount;
+				const ptype = variantKey(p.predictionType);
+				const marketId = p.marketId || null;
+				const marketTitle = predMarketName(p.marketId, predMeta);
+				const closedAtPred = rawNum(p.closedAt);
+				const res = await upsertClosedTrade(addr, {
+					positionKey: key,
+					source: 'polymarket',
+					positionType: ptype || 'yes',
+					entryPrice: rawNum(p.pricePerShare) / PRICE_SCALE,
+					exitPrice: null,
+					amount: rawNum(p.amountUsd) / USD_SCALE,
+					pnl: null,
+					marketId,
+					marketTitle,
+					pairIndex: null,
+					platform: 'polymarket',
+					status: variantKey(p.status),
+					openedAtIso: toIsoFromSeconds(e.openedAt),
+					tradeMode: 'prediction',
+					orderType: null,
+					leverage: null,
+					marginUsd: rawNum(p.amountUsd) / USD_SCALE,
+					liquidationPrice: null,
+					closePrice: null,
+					closedAtIso: closedAtPred > 0 ? toIsoFromSeconds(closedAtPred) : null,
+					realizedPnl: null
+				});
+				if (!res.ok) console.warn('[history] failed to sync closed prediction trade', res.error);
+			})
+		);
+
+		const postedMap = await fetchPostedStateByPositionKeys(
+			addr,
+			closed.map((e) => positionKeyForEntry(e))
+		);
+		// Merge with any optimistic flips already in memory so a freshly
+		// posted trade keeps its POSTED state if the DB read lags slightly.
+		postedByPositionKey = { ...postedByPositionKey, ...postedMap };
+	}
+
+	async function postEntryToCommunity(e: HistoryEntry) {
+		if (postingPubkey) return;
+		const addr = walletAddress();
+		if (!addr) {
+			actionMessage = 'Connect wallet first.';
+			return;
+		}
+		const key = positionKeyForEntry(e);
+		if (postedByPositionKey[key]) return;
+		postingPubkey = e.pubkey;
+		actionMessage = '';
+		try {
+			const res = await markTradePosted(addr, key, postComment.trim() || undefined);
+			if (!res.ok) {
+				actionMessage = res.error || 'Failed to post.';
+				postError = actionMessage;
+				return;
+			}
+			postedByPositionKey = { ...postedByPositionKey, [key]: true };
+			actionMessage = 'Trade posted to community feed.';
+			closePostModal();
+		} finally {
+			postingPubkey = '';
+		}
+	}
+
+	let unpostingPubkey = '';
+	async function unpostEntry(e: HistoryEntry) {
+		if (unpostingPubkey) return;
+		const addr = walletAddress();
+		if (!addr) return;
+		const key = positionKeyForEntry(e);
+		if (!postedByPositionKey[key]) return;
+		if (!confirm('Remove this trade from the community feed?')) return;
+		unpostingPubkey = e.pubkey;
+		actionMessage = '';
+		try {
+			const res = await unpostTrade(addr, { positionKey: key });
+			if (!res.ok) {
+				actionMessage = res.error || 'Failed to unpost.';
+				return;
+			}
+			const next = { ...postedByPositionKey };
+			delete next[key];
+			postedByPositionKey = next;
+			actionMessage = 'Trade removed from community feed.';
+		} finally {
+			unpostingPubkey = '';
+		}
+	}
+
+	function openPostModal(e: HistoryEntry) {
+		postModalEntry = e;
+		postComment = '';
+		postError = '';
+		postModalOpen = true;
+	}
+
+	function closePostModal() {
+		postModalOpen = false;
+		postModalEntry = null;
+		postComment = '';
+		postError = '';
 	}
 
 	/* Mark from Pyth — same source as terminal Open Orders. Looked up directly
@@ -719,18 +911,18 @@
 								<div>SIDE</div>
 								<div>SIZE</div>
 								<div>ENTRY → EXIT</div>
-								<div>STATUS</div>
 								<div class="rt-num">REALIZED PNL</div>
+								<div>ACTION</div>
 							</div>
 							{#each closedEntries as e (e.pubkey)}
 								{#if e.kind === 'trading'}
 									{@const t = e.data as TradingPositionAccount}
 									{@const pnl = fmtPnl(t.realizedPnl)}
-									{@const status = variantKey(t.status)}
 									{@const tmode = variantKey(t.tradeMode)}
 									{@const otype = variantKey(t.orderType)}
 									{@const cat = tradingCategory(t)}
 									{@const closePx = rawNum(t.closePrice) / PRICE_SCALE}
+									{@const isPosted = !!postedByPositionKey[`trading:${rawNum(t.positionId)}`]}
 									<div class="row">
 										<div class="cell-stack">
 											<span class="dim">{shortDate(e.openedAt)}</span>
@@ -759,17 +951,35 @@
 												<span class="dim small">→ ${closePx.toFixed(4)}</span>
 											{/if}
 										</div>
-										<div>
-											<span class="status-badge s-{status}">
-												{status.toUpperCase()}
-											</span>
-										</div>
 										<div class="rt-num {pnl.cls}">{pnl.txt}</div>
+										<div>
+											{#if isPosted}
+												<span class="posted-wrap">
+													<span class="posted-pill">POSTED</span>
+													<button
+														type="button"
+														class="unpost-pill"
+														disabled={unpostingPubkey === e.pubkey}
+														on:click={() => unpostEntry(e)}
+													>
+														{unpostingPubkey === e.pubkey ? '…' : 'UNPOST'}
+													</button>
+												</span>
+											{:else}
+												<button
+													class="post-btn"
+													disabled={postingPubkey === e.pubkey}
+													on:click={() => openPostModal(e)}
+												>
+													POST
+												</button>
+											{/if}
+										</div>
 									</div>
 								{:else}
 									{@const p = e.data as PredictionPositionAccount}
 									{@const ptype = variantKey(p.predictionType)}
-									{@const status = variantKey(p.status)}
+									{@const isPosted = !!postedByPositionKey[`prediction:${rawNum(p.positionId)}`]}
 									<div class="row">
 										<div class="dim">{shortDate(e.openedAt)}</div>
 										<div><span class="cat-badge cat-prediction">PREDICTION</span></div>
@@ -790,12 +1000,30 @@
 											</span>
 										</div>
 										<div>${fmtPrice(p.pricePerShare)}</div>
-										<div>
-											<span class="status-badge s-{status}">
-												{status === 'fullySold' ? 'SOLD' : status.toUpperCase()}
-											</span>
-										</div>
 										<div class="rt-num flat">—</div>
+										<div>
+											{#if isPosted}
+												<span class="posted-wrap">
+													<span class="posted-pill">POSTED</span>
+													<button
+														type="button"
+														class="unpost-pill"
+														disabled={unpostingPubkey === e.pubkey}
+														on:click={() => unpostEntry(e)}
+													>
+														{unpostingPubkey === e.pubkey ? '…' : 'UNPOST'}
+													</button>
+												</span>
+											{:else}
+												<button
+													class="post-btn"
+													disabled={postingPubkey === e.pubkey}
+													on:click={() => openPostModal(e)}
+												>
+													POST
+												</button>
+											{/if}
+										</div>
 									</div>
 								{/if}
 							{/each}
@@ -806,6 +1034,51 @@
 		{/if}
 	</div>
 </main>
+
+{#if postModalOpen && postModalEntry}
+	<div
+		class="post-modal-backdrop"
+		role="button"
+		tabindex="0"
+		aria-label="Close post modal"
+		on:click={closePostModal}
+		on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && closePostModal()}
+	>
+		<div
+			class="post-modal"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Post trade modal"
+			tabindex="-1"
+			on:click|stopPropagation
+			on:keydown|stopPropagation={() => {}}
+		>
+			<div class="post-modal-title">Post trade to community</div>
+			<div class="post-modal-subtitle">
+				Add a comment to include with this post.
+			</div>
+			<textarea
+				class="post-comment-input"
+				placeholder="Share why you took this trade..."
+				bind:value={postComment}
+				maxlength="500"
+			></textarea>
+			{#if postError}
+				<div class="post-error">{postError}</div>
+			{/if}
+			<div class="post-modal-actions">
+				<button class="post-cancel-btn" on:click={closePostModal}>Cancel</button>
+				<button
+					class="post-confirm-btn"
+					disabled={postingPubkey === postModalEntry.pubkey}
+					on:click={() => postEntryToCommunity(postModalEntry!)}
+				>
+					{postingPubkey === postModalEntry.pubkey ? 'POSTING…' : 'Post'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.history-page {
@@ -867,6 +1140,118 @@
 	}
 	.refresh:hover { border-color: #ff5a00; color: #ff5a00; }
 	.refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+	.post-btn {
+		background: #0f0f0f;
+		border: 1px solid #333;
+		border-radius: 6px;
+		color: #d0d0d0;
+		font-family: inherit;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		padding: 5px 10px;
+		cursor: pointer;
+	}
+	.post-btn:hover { border-color: #ff5a00; color: #ff5a00; }
+	.post-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+	.posted-pill {
+		display: inline-block;
+		border: 1px solid rgba(0, 255, 100, 0.45);
+		background: rgba(0, 255, 100, 0.08);
+		color: #00ff64;
+		padding: 4px 8px;
+		border-radius: 999px;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+	}
+	.posted-wrap {
+		position: relative;
+		display: inline-block;
+	}
+	.posted-wrap:hover .posted-pill { opacity: 0; }
+	.unpost-pill {
+		position: absolute;
+		inset: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		pointer-events: none;
+		font-family: inherit;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		color: #ff6b6b;
+		background: rgba(255, 107, 107, 0.08);
+		border: 1px solid rgba(255, 107, 107, 0.45);
+		border-radius: 999px;
+		padding: 4px 8px;
+		cursor: pointer;
+		transition: background 0.12s, color 0.12s;
+	}
+	.posted-wrap:hover .unpost-pill {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.unpost-pill:hover { background: #ff4444; color: #fff; border-color: #ff4444; }
+	.unpost-pill:disabled { opacity: 0.6; cursor: not-allowed; }
+	.post-modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		display: grid;
+		place-items: center;
+		z-index: 1100;
+	}
+	.post-modal {
+		width: min(520px, calc(100vw - 32px));
+		background: #111;
+		border: 1px solid #2a2a2a;
+		border-radius: 12px;
+		padding: 16px;
+	}
+	.post-modal-title { color: #fff; font-weight: 700; margin-bottom: 6px; }
+	.post-modal-subtitle { color: #9a9a9a; font-size: 12px; margin-bottom: 10px; }
+	.post-comment-input {
+		width: 100%;
+		min-height: 110px;
+		background: #0b0b0b;
+		border: 1px solid #2f2f2f;
+		border-radius: 8px;
+		color: #ddd;
+		padding: 10px;
+		resize: vertical;
+		font-family: inherit;
+		font-size: 12px;
+	}
+	.post-modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+		margin-top: 12px;
+	}
+	.post-cancel-btn, .post-confirm-btn {
+		font-family: inherit;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		border-radius: 8px;
+		padding: 7px 12px;
+		cursor: pointer;
+	}
+	.post-cancel-btn {
+		background: #0b0b0b;
+		border: 1px solid #333;
+		color: #b9b9b9;
+	}
+	.post-confirm-btn {
+		background: #ff5a00;
+		border: 1px solid #ff5a00;
+		color: #111;
+	}
+	.post-confirm-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+	.post-error { margin-top: 8px; color: #ff6b6b; font-size: 11px; }
 
 	.placeholder {
 		padding: 3rem 1rem;
@@ -1217,8 +1602,8 @@
 			minmax(72px, 0.75fr)
 			minmax(100px, 1fr)
 			minmax(112px, 1.15fr)
-			minmax(84px, 0.85fr)
-			minmax(92px, 1fr);
+			minmax(120px, 1.1fr)
+			minmax(92px, 0.9fr);
 		gap: 10px 12px;
 		padding: 10px 12px;
 		border-bottom: 1px solid #1a1a1a;

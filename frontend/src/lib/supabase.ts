@@ -102,6 +102,7 @@ export async function updateBanner(walletAddress: string, bannerUrl: string): Pr
 export interface PostedTrade {
 	id: string;
 	user_id?: string | null;
+	position_key?: string | null;
 	source: string | null;
 	position_type: string | null;
 	entry_price: number | null;
@@ -115,12 +116,21 @@ export interface PostedTrade {
 	status: string | null;
 	analysis: string | null;
 	is_published: boolean | null;
+	posted?: boolean | null;
 	opened_at: string | null;
 	created_at?: string | null;
 	likes_count?: number | null;
 	comments_count?: number | null;
 	take_profit_price?: number | null;
 	stop_loss_price?: number | null;
+	trade_mode?: string | null;
+	order_type?: string | null;
+	leverage?: number | null;
+	margin_usd?: number | null;
+	liquidation_price?: number | null;
+	close_price?: number | null;
+	closed_at?: string | null;
+	realized_pnl?: number | null;
 }
 
 export async function fetchPostedTrades(walletAddress: string): Promise<PostedTrade[]> {
@@ -131,7 +141,7 @@ export async function fetchPostedTrades(walletAddress: string): Promise<PostedTr
 	const { data, error } = await sb
 		.from('trades')
 		.select(
-			'id, user_id, source, position_type, entry_price, exit_price, amount, pnl, market_id, market_title, pair_index, platform, status, analysis, is_published, opened_at, created_at, likes_count, comments_count, take_profit_price, stop_loss_price'
+			'id, user_id, position_key, source, position_type, entry_price, exit_price, amount, pnl, market_id, market_title, pair_index, platform, status, analysis, is_published, posted, opened_at, created_at, likes_count, comments_count, take_profit_price, stop_loss_price, trade_mode, order_type, leverage, margin_usd, liquidation_price, close_price, closed_at, realized_pnl'
 		)
 		.eq('user_id', userId)
 		.order('opened_at', { ascending: false });
@@ -140,6 +150,157 @@ export async function fetchPostedTrades(walletAddress: string): Promise<PostedTr
 		return [];
 	}
 	return (data as any[]) as PostedTrade[];
+}
+
+export interface ClosedTradeUpsertInput {
+	positionKey: string;
+	source: string;
+	positionType: string;
+	entryPrice: number | null;
+	exitPrice: number | null;
+	amount: number | null;
+	pnl: number | null;
+	marketId: string | null;
+	marketTitle: string | null;
+	pairIndex: number | null;
+	platform: string | null;
+	status: string | null;
+	openedAtIso: string | null;
+	analysis?: string | null;
+	takeProfitPrice?: number | null;
+	stopLossPrice?: number | null;
+	tradeMode?: string | null;
+	orderType?: string | null;
+	leverage?: number | null;
+	marginUsd?: number | null;
+	liquidationPrice?: number | null;
+	closePrice?: number | null;
+	closedAtIso?: string | null;
+	realizedPnl?: number | null;
+}
+
+export async function upsertClosedTrade(
+	walletAddress: string,
+	input: ClosedTradeUpsertInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const sb = getSupabase();
+	if (!sb) return { ok: false, error: 'Database unavailable' };
+	const userId = await fetchUserId(walletAddress);
+	if (!userId) return { ok: false, error: 'User not found in database' };
+
+	const row: any = {
+		user_id: userId,
+		position_key: input.positionKey,
+		source: input.source,
+		position_type: input.positionType,
+		entry_price: input.entryPrice,
+		exit_price: input.exitPrice,
+		amount: input.amount,
+		pnl: input.pnl,
+		market_id: input.marketId,
+		market_title: input.marketTitle,
+		pair_index: input.pairIndex,
+		platform: input.platform,
+		status: input.status,
+		opened_at: input.openedAtIso,
+		take_profit_price: input.takeProfitPrice ?? null,
+		stop_loss_price: input.stopLossPrice ?? null,
+		trade_mode: input.tradeMode ?? null,
+		order_type: input.orderType ?? null,
+		leverage: input.leverage ?? null,
+		margin_usd: input.marginUsd ?? null,
+		liquidation_price: input.liquidationPrice ?? null,
+		close_price: input.closePrice ?? null,
+		closed_at: input.closedAtIso ?? null,
+		realized_pnl: input.realizedPnl ?? null
+	};
+	if (input.analysis !== undefined) row.analysis = input.analysis;
+
+	const { error } = await sb.from('trades').upsert(row, { onConflict: 'position_key' });
+	if (error) return { ok: false, error: error.message };
+	return { ok: true };
+}
+
+export async function fetchPostedStateByPositionKeys(
+	walletAddress: string,
+	positionKeys: string[]
+): Promise<Record<string, boolean>> {
+	const out: Record<string, boolean> = {};
+	if (positionKeys.length === 0) return out;
+	const sb = getSupabase();
+	if (!sb) return out;
+	const userId = await fetchUserId(walletAddress);
+	if (!userId) return out;
+	const { data, error } = await sb
+		.from('trades')
+		.select('position_key, posted, is_published')
+		.eq('user_id', userId)
+		.in('position_key', positionKeys);
+	if (error) {
+		console.warn('[supabase] posted state fetch error', error.message);
+		return out;
+	}
+	for (const row of (data as any[]) ?? []) {
+		const key = row.position_key as string | null;
+		if (!key) continue;
+		out[key] = !!(row.posted ?? row.is_published);
+	}
+	return out;
+}
+
+/** Remove a trade from the public feed. Accepts either the position_key
+ *  (preferred for History rows) or the DB row id (used by Profile, since
+ *  the SharedTrade may carry the row id even when the row predates the
+ *  position_key column). */
+export async function unpostTrade(
+	walletAddress: string,
+	identifier: { positionKey?: string | null; tradeId?: string | null }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const sb = getSupabase();
+	if (!sb) return { ok: false, error: 'Database unavailable' };
+	const userId = await fetchUserId(walletAddress);
+	if (!userId) return { ok: false, error: 'User not found in database' };
+
+	let q = sb
+		.from('trades')
+		.update({ posted: false, is_published: false })
+		.eq('user_id', userId);
+	if (identifier.tradeId) q = q.eq('id', identifier.tradeId);
+	else if (identifier.positionKey) q = q.eq('position_key', identifier.positionKey);
+	else return { ok: false, error: 'Missing trade identifier' };
+
+	const { data, error } = await q.select('id');
+	if (error) return { ok: false, error: error.message };
+	if (!data || data.length === 0) {
+		return { ok: false, error: 'Post not found or not owned by current user' };
+	}
+	return { ok: true };
+}
+
+export async function markTradePosted(
+	walletAddress: string,
+	positionKey: string,
+	comment?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const sb = getSupabase();
+	if (!sb) return { ok: false, error: 'Database unavailable' };
+	const userId = await fetchUserId(walletAddress);
+	if (!userId) return { ok: false, error: 'User not found in database' };
+
+	const patch: Record<string, any> = { posted: true, is_published: true };
+	if (comment !== undefined) patch.analysis = comment;
+	const { data, error } = await sb
+		.from('trades')
+		.update(patch)
+		.eq('user_id', userId)
+		.eq('position_key', positionKey)
+		.select('id')
+		.limit(1);
+	if (error) return { ok: false, error: error.message };
+	if (!data || data.length === 0) {
+		return { ok: false, error: 'Trade row not found for current user/position key' };
+	}
+	return { ok: true };
 }
 
 export interface PostedStrategy {

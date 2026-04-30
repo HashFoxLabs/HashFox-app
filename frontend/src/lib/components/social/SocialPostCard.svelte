@@ -19,6 +19,22 @@
 	export let followingIds: Set<string> = new Set();
 	export let onToggleFollow: (userId: string) => Promise<void> | void = () => {};
 	export let readonly: boolean = false;
+	/** Optional handler to remove the post from the public feed.
+	 * When provided, an UNPOST button is rendered in the footer. */
+	export let onUnpost: ((trade: SharedTrade) => Promise<void> | void) | null = null;
+
+	let unposting = false;
+	async function handleUnpost(e: MouseEvent) {
+		e.stopPropagation();
+		if (!onUnpost || unposting) return;
+		if (!confirm('Remove this trade from the community feed?')) return;
+		unposting = true;
+		try {
+			await onUnpost(trade);
+		} finally {
+			unposting = false;
+		}
+	}
 
 	let showDetail = false;
 	let commentText = '';
@@ -56,6 +72,16 @@
 		if (!p && p !== 0) return '—';
 		if (Math.abs(p) < 10) return `$${p.toFixed(3)}`;
 		return `$${p.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+	}
+
+	/** Render a percent that is non-zero but rounds to 0.00 with extra
+	 *  precision, so a tiny realised loss never shows as "0.00%". */
+	function formatPct(p: number): string {
+		if (!Number.isFinite(p) || p === 0) return '0.00';
+		const abs = Math.abs(p);
+		if (abs >= 0.01) return p.toFixed(2);
+		if (abs >= 0.0001) return p.toFixed(4);
+		return p.toExponential(1);
 	}
 
 	function showLikeMessage(msg: string) {
@@ -251,16 +277,22 @@
 					<span class="chip dir" class:up={isLongish} class:down={!isLongish}>{trade.direction.toUpperCase()}</span>
 				{/if}
 				<span class="chip market">{MARKET_TYPE_LABELS[trade.marketType]}</span>
-				{#if trade.platform}
-					<span class="chip plat">{trade.platform.toUpperCase()}</span>
+				{#if isPaper && trade.tradeMode && trade.tradeMode !== 'prediction'}
+					<span class="chip mode">{trade.tradeMode.toUpperCase()}</span>
 				{/if}
-				{#if trade.status}
-					<span class="chip status" class:closed={trade.status === 'closed'}>{trade.status.toUpperCase()}</span>
+				{#if isPaper && trade.tradeMode === 'perp' && trade.leverage && trade.leverage > 1}
+					<span class="chip lev">{trade.leverage}×</span>
+				{/if}
+				{#if isPaper && trade.orderType === 'limit'}
+					<span class="chip ord">LIMIT</span>
+				{/if}
+				{#if trade.platform && trade.platform.toLowerCase() !== 'blockberg'}
+					<span class="chip plat">{trade.platform.toUpperCase()}</span>
 				{/if}
 			</div>
 			<div class="pnl">
 				<span class="pnl-pct" class:up={isPositive} class:down={!isPositive}>
-					{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+					{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%
 				</span>
 				{#if isPaper}
 					<span class="pnl-abs" class:up={isPositive} class:down={!isPositive}>
@@ -282,7 +314,7 @@
 					<div class="chart-head">
 						<span>EQUITY CURVE</span>
 						<span class="chart-pct" class:up={isPositive} class:down={!isPositive}>
-							{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+							{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%
 						</span>
 					</div>
 					<SocialEquityChart rawData={trade.equityCurveRaw} positive={isPositive} height={140} />
@@ -325,6 +357,14 @@
 					</svg>
 					<span>{commentCount}</span>
 				</span>
+				{#if onUnpost}
+					<button class="action-btn unpost" disabled={unposting} on:click={handleUnpost}>
+						<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2m-6 4v6m4-6v6M5 7l1 13a2 2 0 002 2h8a2 2 0 002-2l1-13" />
+						</svg>
+						<span>{unposting ? 'REMOVING…' : 'UNPOST'}</span>
+					</button>
+				{/if}
 			{:else}
 				<button class="action-btn" on:click={(e) => { e.stopPropagation(); openDetail(); }}>
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -379,7 +419,7 @@
 						{trade.asset}
 					</p>
 					<span class="pill" class:up={isPositive} class:down={!isPositive}>
-						{isPaper ? trade.direction.toUpperCase() : `${isPositive ? '+' : ''}${trade.pnlPercent.toFixed(2)}%`}
+						{isPaper ? trade.direction.toUpperCase() : `${isPositive ? '+' : ''}${formatPct(trade.pnlPercent)}%`}
 					</span>
 				</div>
 
@@ -404,7 +444,7 @@
 							<span>P&amp;L</span>
 							<p class:up={isPositive} class:down={!isPositive}>
 								{isPositive ? '+' : ''}${Math.abs(trade.pnl).toFixed(2)}
-								<small>({isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%)</small>
+								<small>({isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%)</small>
 							</p>
 						</div>
 					</div>
@@ -424,7 +464,7 @@
 							<div class="chart-head">
 								<span>EQUITY CURVE</span>
 								<span class="chart-pct" class:up={isPositive} class:down={!isPositive}>
-									{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+									{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%
 								</span>
 							</div>
 							<SocialEquityChart rawData={trade.equityCurveRaw} positive={isPositive} />
@@ -438,7 +478,7 @@
 					<div class="stat-row">
 						<div class="stat"><span>Start</span><strong>${(trade.initialCapital ?? trade.startBalance ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
 						<div class="stat"><span>Final</span><strong class:up={isPositive} class:down={!isPositive}>${(trade.finalCapital ?? trade.endBalance ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div>
-						<div class="stat"><span>Return</span><strong class:up={isPositive} class:down={!isPositive}>{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%</strong></div>
+						<div class="stat"><span>Return</span><strong class:up={isPositive} class:down={!isPositive}>{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%</strong></div>
 						<div class="stat"><span>Net P&amp;L</span><strong class:up={isPositive} class:down={!isPositive}>{isPositive ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}</strong></div>
 					</div>
 					<div class="stat-row">
@@ -616,6 +656,9 @@
 	.chip.dir.up { color: #00ff66; border-color: rgba(0,255,102,0.3); background: rgba(0,255,102,0.08); }
 	.chip.dir.down { color: #ff6b6b; border-color: rgba(255,107,107,0.3); background: rgba(255,107,107,0.08); }
 	.chip.market { color: #ff5a00; border-color: rgba(255, 90, 0,0.3); background: rgba(255, 90, 0,0.06); }
+	.chip.mode { color: #d8c46d; border-color: rgba(216,196,109,0.3); background: rgba(216,196,109,0.07); }
+	.chip.lev { color: #ff5a00; border-color: rgba(255, 90, 0,0.45); background: rgba(255, 90, 0,0.12); }
+	.chip.ord { color: #c0a0ff; border-color: rgba(192,160,255,0.3); background: rgba(192,160,255,0.07); }
 	.chip.plat { color: #aaa; }
 	.chip.status { color: #00ff66; border-color: rgba(0,255,102,0.3); background: rgba(0,255,102,0.08); }
 	.chip.status.closed { color: #888; border-color: #333; background: rgba(255,255,255,0.04); }
@@ -691,6 +734,14 @@
 	.action-btn.liked { color: #ff5a00; background: rgba(255, 90, 0,0.1); }
 	.action-btn.ghost { margin-left: auto; color: #777; font-size: 11px; letter-spacing: 0.04em; }
 	.action-btn.ghost:hover { color: #ff5a00; background: transparent; }
+	.action-btn.unpost {
+		margin-left: auto;
+		color: #ff6b6b;
+		border: 1px solid rgba(255, 107, 107, 0.3);
+		background: rgba(255, 107, 107, 0.05);
+	}
+	.action-btn.unpost:hover { color: #fff; background: #ff4444; border-color: #ff4444; }
+	.action-btn.unpost:disabled { opacity: 0.55; cursor: not-allowed; }
 	.market-tag {
 		font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
 		color: #ff5a00; font-family: 'Courier New', monospace;
