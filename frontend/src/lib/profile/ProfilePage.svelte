@@ -12,6 +12,7 @@
 		type PostedStrategy
 	} from '$lib/supabase';
 	import SocialPostCard from '$lib/components/social/SocialPostCard.svelte';
+	import MintCardModal from '$lib/profile/MintCardModal.svelte';
 	import type { SharedTrade, TradeDirection, MarketType } from '$lib/social/types';
 
 	let wallet: any = {};
@@ -38,6 +39,8 @@
 
 	type Filter = 'all' | 'trades' | 'strategies';
 	let filter: Filter = 'all';
+
+	let mintModalOpen = false;
 
 	function walletAddress(): string {
 		return wallet?.publicKey?.toBase58 ? wallet.publicKey.toBase58() : wallet?.publicKey?.toString?.() || '';
@@ -385,8 +388,17 @@
 						{copied ? 'COPIED' : walletAddress()}
 					</div>
 				</div>
+
+				<div class="hero-actions">
+					<button class="mint-btn" on:click={() => (mintModalOpen = true)}>
+						<span class="dot"></span>
+						MINT TRADER CARD
+					</button>
+				</div>
 			</div>
 		</section>
+
+		<MintCardModal open={mintModalOpen} onClose={() => (mintModalOpen = false)} />
 
 		<div class="pad">
 			<!-- Tabs under hero -->
@@ -548,7 +560,37 @@
 		font-size: 10px;
 		color: #ccc;
 	}
-	.meta { min-width: 0; padding-bottom: 10px; }
+	.meta { min-width: 0; padding-bottom: 10px; flex: 1; }
+
+	.hero-actions {
+		padding-bottom: 10px;
+		display: flex;
+		align-items: flex-end;
+	}
+	.mint-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		background: #ff5a00;
+		border: 1px solid #ff5a00;
+		color: #000;
+		font-family: inherit;
+		font-size: 11px;
+		font-weight: bold;
+		letter-spacing: 0.14em;
+		padding: 10px 16px;
+		border-radius: 6px;
+		cursor: pointer;
+		box-shadow: 0 6px 24px rgba(255, 90, 0, 0.25);
+	}
+	.mint-btn:hover { background: #ff7a2c; border-color: #ff7a2c; }
+	.mint-btn .dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: #000;
+		box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25) inset;
+	}
 	.uname { color: #ff5a00; font-size: 22px; font-weight: 900; letter-spacing: 0.04em; }
 	.addr {
 		color: #aaa;

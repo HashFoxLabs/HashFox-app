@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { onDestroy, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import type { ConnectedSocialUser, FeedUserProfile } from '$lib/social/types';
+	import { fetchLeaderboard, buildPnlBadgeMap, formatPnlBadge } from '$lib/social/leaderboard';
 	import VideoCall from './VideoCall.svelte';
 
 	export let connectedUser: ConnectedSocialUser | null = null;
@@ -8,6 +9,10 @@
 	export let embedded: boolean = false;
 	export let onClose: () => void = () => {};
 	export let onExpand: (() => void) | null = null;
+
+	/** Map<username|userId, pnlPercent> sourced from the leaderboard so the
+	 * badge next to a user in chat matches the one on the leaderboard. */
+	let leaderboardPnl: Map<string, number> = new Map();
 
 	const CHANNEL_ID = 'hashfox-global';
 	let videoCallOpen = false;
@@ -35,7 +40,12 @@
 
 	$: pnlByUsername = (() => {
 		const map = new Map<string, number>();
+		// Prefer leaderboard-derived pnl % (sum(pnl)/sum(volume) across every
+		// trade) so the badge in chat is the same number shown on the
+		// Leaderboard. Fall back to feed profile data if leaderboard hasn't
+		// loaded yet.
 		for (const p of profiles) map.set(p.username, p.totalPnl);
+		for (const [k, v] of leaderboardPnl) map.set(k, v);
 		return map;
 	})();
 
@@ -44,8 +54,7 @@
 		return p >= 0 ? 'up' : 'down';
 	}
 	function fmtPnl(p: number | undefined) {
-		if (p == null) return null;
-		return `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`;
+		return formatPnlBadge(p ?? null);
 	}
 
 	function fmtTime(d: Date | string | undefined) {
@@ -253,6 +262,15 @@
 		connecting = true;
 		await init();
 	}
+
+	onMount(async () => {
+		try {
+			const entries = await fetchLeaderboard();
+			leaderboardPnl = buildPnlBadgeMap(entries);
+		} catch (err) {
+			console.warn('[LiveChat] leaderboard fetch failed', err);
+		}
+	});
 
 	onDestroy(() => {
 		teardown();
