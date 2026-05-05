@@ -48,7 +48,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
 	for (let i = 0; i < 20; i++) {
 		const { data, error } = await sb
 			.from('trades')
-			.select('user_id, pnl, amount, created_at, status')
+			.select('user_id, pnl, amount, margin_usd, created_at, status')
 			.range(offset, offset + PAGE_SIZE - 1);
 		if (error) {
 			console.warn('[leaderboard] trades fetch error', error.message);
@@ -72,6 +72,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
 	type Agg = {
 		totalPnl: number;
 		totalVolume: number;
+		totalCapital: number;
 		tradeCount: number;
 		winCount: number;
 		lossCount: number;
@@ -85,12 +86,17 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
 		if (!uid) continue;
 		const pnl = Number(t.pnl) || 0;
 		const amount = Number(t.amount) || 0;
+		const margin = Number(t.margin_usd) || 0;
+		// ROI denominator: capital deployed (margin). Falls back to notional for
+		// legacy rows missing margin_usd, so older trades still contribute.
+		const capital = margin > 0 ? margin : amount;
 		const ts = (t.created_at as string | null) ?? null;
 		let agg = aggByUser.get(uid);
 		if (!agg) {
 			agg = {
 				totalPnl: 0,
 				totalVolume: 0,
+				totalCapital: 0,
 				tradeCount: 0,
 				winCount: 0,
 				lossCount: 0,
@@ -102,6 +108,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
 		}
 		agg.totalPnl += pnl;
 		agg.totalVolume += amount;
+		agg.totalCapital += capital;
 		agg.tradeCount += 1;
 		if (pnl > 0) agg.winCount += 1;
 		else if (pnl < 0) agg.lossCount += 1;
@@ -125,7 +132,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
 			bannerUrl: u.banner_url ?? null,
 			totalPnl: agg.totalPnl,
 			totalVolume: agg.totalVolume,
-			pnlPercent: agg.totalVolume > 0 ? (agg.totalPnl / agg.totalVolume) * 100 : 0,
+			pnlPercent: agg.totalCapital > 0 ? (agg.totalPnl / agg.totalCapital) * 100 : 0,
 			tradeCount: agg.tradeCount,
 			winCount: agg.winCount,
 			lossCount: agg.lossCount,
