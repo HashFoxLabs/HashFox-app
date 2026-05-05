@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
 		"preview": "vite preview",
 		"pages:deploy": "npm run build && npx wrangler pages deploy .svelte-kit/cloudflare",
 		"deploy:worker": "npm run build && wrangler deploy",
