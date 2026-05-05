@@ -22,6 +22,10 @@
 	let messages: any[] = [];
 	let draft = '';
 	let connecting = true;
+
+	function isDeletedMessage(m: any): boolean {
+		return !m || m.type === 'deleted' || !!m.deleted_at;
+	}
 	let error: string | null = null;
 	let listEl: HTMLDivElement | null = null;
 	let inputEl: HTMLInputElement | null = null;
@@ -124,11 +128,11 @@
 			} as any);
 			await channel.watch({ presence: true } as any);
 
-			messages = [...(channel.state.messages as any[])];
+			messages = (channel.state.messages as any[]).filter((m) => !isDeletedMessage(m));
 			onlineCount = channel.state.watcher_count || 0;
 
 			channel.on('message.new', (e: any) => {
-				if (e.message) {
+				if (e.message && !isDeletedMessage(e.message)) {
 					messages = [...messages, e.message];
 					scrollToBottom();
 				}
@@ -139,7 +143,10 @@
 				}
 			});
 			channel.on('message.updated', (e: any) => {
-				if (e.message?.id) {
+				if (!e.message?.id) return;
+				if (isDeletedMessage(e.message)) {
+					messages = messages.filter((m) => m.id !== e.message.id);
+				} else {
 					messages = messages.map((m) => (m.id === e.message.id ? e.message : m));
 				}
 			});
