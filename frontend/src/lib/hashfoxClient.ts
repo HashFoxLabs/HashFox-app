@@ -124,14 +124,52 @@ class HashfoxClient {
 		}
 	}
 
-	/** Returns the on-chain UserAccount struct or null if not initialized. */
+	/** Returns the on-chain UserAccount struct or null if not initialized.
+	 * Auto-migrates pre-competition layouts (32 bytes shorter than the new
+	 * struct) the first time they're encountered, so existing devnet users
+	 * don't have to do anything manually. */
 	async getUserAccount(): Promise<any | null> {
 		if (!this.program || !this.connectedWallet?.publicKey) return null;
 		const [pda] = userPda(this.connectedWallet.publicKey);
 		try {
 			return await (this.program.account as any).userAccount.fetch(pda);
-		} catch {
+		} catch (err: any) {
+			if (await this.tryAutoMigrateUserAccount(pda)) {
+				try {
+					return await (this.program.account as any).userAccount.fetch(pda);
+				} catch {
+					return null;
+				}
+			}
 			return null;
+		}
+	}
+
+	/** Detect + run the one-time UserAccount realloc migration. Returns true
+	 * if a migration tx was actually sent. Idempotent: safe to call repeatedly. */
+	async tryAutoMigrateUserAccount(pdaArg?: PublicKey): Promise<boolean> {
+		if (!this.program || !this.connectedWallet?.publicKey) return false;
+		const adapter = this.connectedWallet as SignerWalletAdapter | null;
+		if (!adapter?.signTransaction) return false;
+		const [pda] = pdaArg ? [pdaArg] : userPda(this.connectedWallet.publicKey);
+		const info = await this.solanaConnection.getAccountInfo(pda);
+		if (!info) return false;
+		// Old layout: 81 bytes. New layout: 113 bytes (adds 32-byte
+		// active_competition Pubkey).
+		if (info.data.length >= 113) return false;
+		try {
+			await this.program.methods
+				.migrateUserAccount()
+				.accounts(<any>{
+					userAccount: pda,
+					user: this.connectedWallet.publicKey,
+					systemProgram: SystemProgram.programId
+				})
+				.rpc();
+			return true;
+		} catch (e) {
+			console.warn('[hashfox] migrate_user_account failed', e);
+			return false;
 		}
 	}
 
@@ -251,12 +289,13 @@ class HashfoxClient {
 			const total = userAcc ? Number(userAcc.totalTradingPositions.toString()) : 0;
 
 			if (total > 0) {
+				const [userAccountPda] = userPda(owner);
 				const pdas: PublicKey[] = [];
 				for (let i = 0; i < total; i++) {
 					const [pda] = PublicKey.findProgramAddressSync(
 						[
 							Buffer.from('trade'),
-							owner.toBuffer(),
+							userAccountPda.toBuffer(),
 							new BN(i).toArrayLike(Buffer, 'le', 8)
 						],
 						HASHFOX_PROGRAM_PUBKEY
@@ -279,11 +318,12 @@ class HashfoxClient {
 			}
 
 			// Fallback: getProgramAccounts (in case the counter is out-of-sync).
+			// Anchor's `.all()` returns `{publicKey, account}`, so accept either shape.
 			const accs = await (this.program.account as any).tradingPosition.all([
 				{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 			]);
-			return accs.map((a: { pubkey: PublicKey; account: TradingPositionAccount }) =>
-				enrichTradingPosition(a.pubkey, a.account, pairSymbolFromIndex)
+			return accs.map((a: any) =>
+				enrichTradingPosition(a.publicKey ?? a.pubkey, a.account, pairSymbolFromIndex)
 			);
 		} catch (err) {
 			console.warn('[hashfox] fetch trading positions failed', err);
@@ -298,7 +338,7 @@ class HashfoxClient {
 		const owner = this.connectedWallet.publicKey;
 		const [userAccount] = userPda(owner);
 		const [position] = PublicKey.findProgramAddressSync(
-			[Buffer.from('trade'), owner.toBuffer(), new BN(positionId).toArrayLike(Buffer, 'le', 8)],
+			[Buffer.from('trade'), userAccount.toBuffer(), new BN(positionId).toArrayLike(Buffer, 'le', 8)],
 			HASHFOX_PROGRAM_PUBKEY
 		);
 		return await this.program.methods
@@ -314,7 +354,7 @@ class HashfoxClient {
 		const owner = this.connectedWallet.publicKey;
 		const [userAccount] = userPda(owner);
 		const [position] = PublicKey.findProgramAddressSync(
-			[Buffer.from('trade'), owner.toBuffer(), new BN(positionId).toArrayLike(Buffer, 'le', 8)],
+			[Buffer.from('trade'), userAccount.toBuffer(), new BN(positionId).toArrayLike(Buffer, 'le', 8)],
 			HASHFOX_PROGRAM_PUBKEY
 		);
 		return await this.program.methods

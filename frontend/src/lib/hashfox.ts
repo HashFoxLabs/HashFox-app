@@ -177,16 +177,20 @@ export function findUserPda(owner: PublicKey): [PublicKey, number] {
 	return PublicKey.findProgramAddressSync([Buffer.from('user'), owner.toBuffer()], PROGRAM_ID);
 }
 
-export function findTradePda(owner: PublicKey, positionId: BNType): [PublicKey, number] {
+/** Trade PDAs are now seeded by the user_account PDA (not the wallet) so the
+ * same trading instructions can target either the normal account or a per-
+ * competition account without ID collisions. Callers that already have the
+ * wallet can pass `findUserPda(wallet)[0]` (or the comp_user PDA) here. */
+export function findTradePda(userAccount: PublicKey, positionId: BNType): [PublicKey, number] {
 	return PublicKey.findProgramAddressSync(
-		[Buffer.from('trade'), owner.toBuffer(), positionId.toArrayLike(Buffer, 'le', 8)],
+		[Buffer.from('trade'), userAccount.toBuffer(), positionId.toArrayLike(Buffer, 'le', 8)],
 		PROGRAM_ID
 	);
 }
 
-export function findPredPda(owner: PublicKey, positionId: BNType): [PublicKey, number] {
+export function findPredPda(userAccount: PublicKey, positionId: BNType): [PublicKey, number] {
 	return PublicKey.findProgramAddressSync(
-		[Buffer.from('pred'), owner.toBuffer(), positionId.toArrayLike(Buffer, 'le', 8)],
+		[Buffer.from('pred'), userAccount.toBuffer(), positionId.toArrayLike(Buffer, 'le', 8)],
 		PROGRAM_ID
 	);
 }
@@ -240,6 +244,42 @@ export async function initializeUserAccount(
 		.rpc();
 }
 
+/** One-time migration for `UserAccount`s created before the
+ * `active_competition` field was added. Reallocs the account by 32 bytes and
+ * leaves them zero (= `Pubkey::default()`). Idempotent — safe to call on a
+ * post-migration account, contract returns Ok early. */
+export async function migrateUserAccount(
+	program: any,
+	user: PublicKey,
+	signer?: PublicKey
+): Promise<string> {
+	const txSigner = signer ?? user;
+	const [userPda] = findUserPda(user);
+	return await program.methods
+		.migrateUserAccount()
+		.accounts(<any>{
+			userAccount: userPda,
+			user: txSigner,
+			systemProgram: SystemProgram.programId
+		})
+		.rpc();
+}
+
+/** Returns true if the on-chain `UserAccount` predates the competition
+ * upgrade (data length < new layout). Lets callers prompt or auto-migrate. */
+export async function isUserAccountStale(
+	connection: any,
+	owner: PublicKey
+): Promise<boolean> {
+	const [pda] = findUserPda(owner);
+	const info = await connection.getAccountInfo(pda);
+	if (!info) return false;
+	// Discriminator (8) + owner (32) + 4 × u64 (32) + i64 (8) + bump (1) +
+	// active_competition (32) = 113 bytes. Older layout was 81 bytes.
+	const NEW_MIN = 113;
+	return info.data.length < NEW_MIN;
+}
+
 export async function openMarketPosition(
 	program: any,
 	authority: PublicKey,
@@ -262,7 +302,7 @@ export async function openMarketPosition(
 	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalTradingPositions;
-	const [positionPda] = findTradePda(authority, positionId);
+	const [positionPda] = findTradePda(userPda, positionId);
 
 	return await program.methods
 		.openMarketPosition(
@@ -307,7 +347,7 @@ export async function openLimitOrder(
 	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalTradingPositions;
-	const [positionPda] = findTradePda(authority, positionId);
+	const [positionPda] = findTradePda(userPda, positionId);
 
 	return await program.methods
 		.openLimitOrder(
@@ -341,7 +381,7 @@ export async function closeTradingPosition(
 ): Promise<string> {
 	const txSigner = signer ?? authority;
 	const [userPda] = findUserPda(authority);
-	const [positionPda] = findTradePda(authority, positionId);
+	const [positionPda] = findTradePda(userPda, positionId);
 	return await program.methods
 		.closeTradingPosition(currentPrice)
 		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
@@ -357,7 +397,7 @@ export async function cancelLimitOrder(
 ): Promise<string> {
 	const txSigner = signer ?? authority;
 	const [userPda] = findUserPda(authority);
-	const [positionPda] = findTradePda(authority, positionId);
+	const [positionPda] = findTradePda(userPda, positionId);
 	return await program.methods
 		.cancelLimitOrder()
 		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
@@ -381,7 +421,7 @@ export async function buyYes(
 	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalPredictionPositions;
-	const [positionPda] = findPredPda(authority, positionId);
+	const [positionPda] = findPredPda(userPda, positionId);
 	return await program.methods
 		.buyYes(params.marketId, params.amountUsd, params.pricePerShare, params.stopLoss, params.takeProfit)
 		.accounts(<any>{
@@ -411,7 +451,7 @@ export async function buyNo(
 	const [userPda] = findUserPda(authority);
 	const account = await (program.account as any).userAccount.fetch(userPda);
 	const positionId: BNType = account.totalPredictionPositions;
-	const [positionPda] = findPredPda(authority, positionId);
+	const [positionPda] = findPredPda(userPda, positionId);
 	return await program.methods
 		.buyNo(params.marketId, params.amountUsd, params.pricePerShare, params.stopLoss, params.takeProfit)
 		.accounts(<any>{
@@ -435,7 +475,7 @@ export async function sellYes(
 ): Promise<string> {
 	const txSigner = signer ?? authority;
 	const [userPda] = findUserPda(authority);
-	const [positionPda] = findPredPda(authority, positionId);
+	const [positionPda] = findPredPda(userPda, positionId);
 	return await program.methods
 		.sellYes(sharesToSell, currentPrice)
 		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
@@ -453,7 +493,7 @@ export async function sellNo(
 ): Promise<string> {
 	const txSigner = signer ?? authority;
 	const [userPda] = findUserPda(authority);
-	const [positionPda] = findPredPda(authority, positionId);
+	const [positionPda] = findPredPda(userPda, positionId);
 	return await program.methods
 		.sellNo(sharesToSell, currentPrice)
 		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
@@ -470,7 +510,7 @@ export async function closePredictionPosition(
 ): Promise<string> {
 	const txSigner = signer ?? authority;
 	const [userPda] = findUserPda(authority);
-	const [positionPda] = findPredPda(authority, positionId);
+	const [positionPda] = findPredPda(userPda, positionId);
 	return await program.methods
 		.closePredictionPosition(currentPrice)
 		.accounts(<any>{ userAccount: userPda, position: positionPda, user: txSigner, sessionToken })
@@ -481,7 +521,7 @@ export async function closePredictionPosition(
  * This avoids `getProgramAccounts`, which devnet throttles aggressively. */
 async function fetchPositionsByCounter<T>(
 	program: any,
-	owner: PublicKey,
+	userAccountPda: PublicKey,
 	seed: 'trade' | 'pred',
 	count: number,
 	accountKey: 'tradingPosition' | 'predictionPosition'
@@ -490,7 +530,7 @@ async function fetchPositionsByCounter<T>(
 	const pdas: PublicKey[] = [];
 	for (let i = 0; i < count; i++) {
 		const [pda] = PublicKey.findProgramAddressSync(
-			[Buffer.from(seed), owner.toBuffer(), new BN(i).toArrayLike(Buffer, 'le', 8)],
+			[Buffer.from(seed), userAccountPda.toBuffer(), new BN(i).toArrayLike(Buffer, 'le', 8)],
 			PROGRAM_ID
 		);
 		pdas.push(pda);
@@ -507,12 +547,13 @@ export async function fetchAllTradingPositions(
 	program: any,
 	owner: PublicKey
 ): Promise<Array<{ pubkey: PublicKey; account: TradingPositionAccount }>> {
+	const [userPda] = findUserPda(owner);
 	try {
 		const userAcc = await getUserAccount(program, owner);
 		const total = userAcc ? Number(userAcc.totalTradingPositions.toString()) : 0;
 		const byCounter = await fetchPositionsByCounter<TradingPositionAccount>(
 			program,
-			owner,
+			userPda,
 			'trade',
 			total,
 			'tradingPosition'
@@ -521,22 +562,25 @@ export async function fetchAllTradingPositions(
 	} catch {
 		/* fall through to getProgramAccounts */
 	}
+	// Anchor's `.all()` returns `{publicKey, account}` — normalize to `pubkey`
+	// to match the counter path so downstream consumers work uniformly.
 	const all = await (program.account as any).tradingPosition.all([
 		{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 	]);
-	return all;
+	return all.map((a: any) => ({ pubkey: a.publicKey ?? a.pubkey, account: a.account }));
 }
 
 export async function fetchAllPredictionPositions(
 	program: any,
 	owner: PublicKey
 ): Promise<Array<{ pubkey: PublicKey; account: PredictionPositionAccount }>> {
+	const [userPda] = findUserPda(owner);
 	try {
 		const userAcc = await getUserAccount(program, owner);
 		const total = userAcc ? Number(userAcc.totalPredictionPositions.toString()) : 0;
 		const byCounter = await fetchPositionsByCounter<PredictionPositionAccount>(
 			program,
-			owner,
+			userPda,
 			'pred',
 			total,
 			'predictionPosition'
@@ -548,7 +592,7 @@ export async function fetchAllPredictionPositions(
 	const all = await (program.account as any).predictionPosition.all([
 		{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 	]);
-	return all;
+	return all.map((a: any) => ({ pubkey: a.publicKey ?? a.pubkey, account: a.account }));
 }
 
 export interface UnifiedHistoryEntry {

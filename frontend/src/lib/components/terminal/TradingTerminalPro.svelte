@@ -262,6 +262,13 @@
 	async function ensureAccount() {
 		const conn = buildConnection();
 		const program = buildProgram(conn, wallet.adapter);
+		// Auto-migrate pre-competition UserAccount layouts (32-byte realloc).
+		// Idempotent: returns false fast on already-migrated accounts.
+		try {
+			await hashfoxClient.tryAutoMigrateUserAccount();
+		} catch {
+			/* swallow — getUserAccount below has its own retry */
+		}
 		const acc = await getUserAccount(program, wallet.publicKey);
 		if (!acc) {
 			statusMessage = 'Initializing paper account…';
