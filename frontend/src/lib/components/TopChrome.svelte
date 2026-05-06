@@ -5,6 +5,7 @@
 	import WalletButton from '$lib/wallet/WalletButton.svelte';
 	import CreateUsernameModal from '$lib/profile/CreateUsernameModal.svelte';
 	import { walletStore, setWalletUsername } from '$lib/wallet/stores';
+	import { refreshActiveCompetition, clearActiveCompetition } from '$lib/stores/activeCompetition';
 	import { selectedMarket } from '$lib/stores/selectedMarket';
 	import {
 		pythPrices,
@@ -98,6 +99,7 @@
 			hashfoxClient.setConnectedWallet(null);
 			walletBalanceSol = 0;
 			clearUserBalance();
+			clearActiveCompetition();
 			accountInitialized = false;
 			fastTradingSessionActive = false;
 			magicBlockStatus = 'Ready - Connect wallet to trade';
@@ -140,8 +142,12 @@
 				// Push to the shared store so the navbar updates instantly when a
 				// trade panel triggers a refresh too.
 				setUserBalance(await hashfoxClient.getBalanceBreakdown());
+				// Pick up tournament mode (or its absence) so trade panels know
+				// whether to route through comp_* instructions.
+				void refreshActiveCompetition();
 			} else {
 				clearUserBalance();
+				clearActiveCompetition();
 			}
 			fastTradingSessionActive = hashfoxClient.isPaperTradingSessionActive();
 			magicBlockStatus = fastTradingSessionActive

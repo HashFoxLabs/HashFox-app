@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { walletStore } from '$lib/wallet/stores';
 	import {
 		fetchLeaderboard,
-		getActiveTournaments,
 		formatPnlBadge,
-		type LeaderboardEntry,
-		type Tournament
+		type LeaderboardEntry
 	} from '$lib/social/leaderboard';
 	import {
 		resolveConnectedUser,
@@ -15,6 +13,29 @@
 		toggleFollow,
 		type ConnectedSocialUser
 	} from '$lib/social/types';
+	import {
+		fetchAllCompetitions,
+		competitionTotalPoolSol,
+		fmtCountdown,
+		type CompetitionView
+	} from '$lib/competition';
+	import { hashfoxClient } from '$lib/hashfoxClient';
+	import { Connection, Keypair } from '@solana/web3.js';
+	import { AnchorProvider, Program, type Idl } from '$lib/vendor/anchor';
+	import { SOLANA_RPC } from '$lib/env';
+	import hashfoxIdl from '$lib/idl/hashfox.json';
+
+	function buildReadOnlyProgram(): any {
+		const conn = new Connection(SOLANA_RPC, 'confirmed');
+		const dummy = Keypair.generate();
+		const wallet = {
+			publicKey: dummy.publicKey,
+			signTransaction: async (tx: any) => tx,
+			signAllTransactions: async (txs: any[]) => txs
+		};
+		const provider = new AnchorProvider(conn, wallet as any, { commitment: 'confirmed' });
+		return new Program(hashfoxIdl as Idl, provider);
+	}
 
 	let entries: LeaderboardEntry[] = [];
 	let loading = true;
@@ -24,7 +45,45 @@
 	let timeframe: 'all' | '30d' | '7d' = 'all';
 	let search = '';
 
-	const tournaments: Tournament[] = getActiveTournaments();
+	let competitions: CompetitionView[] = [];
+	let compsLoading = true;
+	let nowMs = Date.now();
+	const tickInterval = setInterval(() => (nowMs = Date.now()), 1000);
+	onDestroy(() => clearInterval(tickInterval));
+
+	$: liveComps = competitions.filter((c) => c.status === 'active');
+	$: pendingComps = competitions.filter((c) => c.status === 'pending');
+	$: visibleComps = (() => {
+		const live = liveComps.slice().sort((a, b) => a.endTs - b.endTs);
+		const pending = pendingComps.slice().sort((a, b) => b.createdAt - a.createdAt);
+		return [...live, ...pending].slice(0, 4);
+	})();
+	$: totalPlayers = competitions.reduce((acc, c) => acc + c.participantCount, 0);
+	$: totalPoolSol = competitions.reduce((acc, c) => acc + competitionTotalPoolSol(c), 0);
+
+	function fmtPoolSol(v: number): string {
+		if (!Number.isFinite(v) || v === 0) return '0 SOL';
+		if (v >= 1000) return `${v.toFixed(0)} SOL`;
+		if (v >= 100) return `${v.toFixed(1)} SOL`;
+		return `${v.toFixed(2)} SOL`;
+	}
+	function fmtEntrySol(v: number): string {
+		if (v <= 0) return 'FREE';
+		if (v >= 1) return `${v.toFixed(2)} SOL`;
+		return `${v.toFixed(3)} SOL`;
+	}
+
+	async function loadCompetitions() {
+		compsLoading = true;
+		try {
+			const program = hashfoxClient.getProgram() ?? buildReadOnlyProgram();
+			competitions = await fetchAllCompetitions(program);
+		} catch (err) {
+			console.warn('[Leaderboard] competitions load failed', err);
+		} finally {
+			compsLoading = false;
+		}
+	}
 
 	async function loadAll() {
 		loading = true;
@@ -44,12 +103,17 @@
 		lastWallet = addr;
 		if (addr) {
 			connectedUser = await resolveConnectedUser(addr, s.username, s.avatarUrl);
+			// Now that the program is available, pull live competitions.
+			loadCompetitions();
 		} else {
 			connectedUser = null;
 		}
 	});
 
-	onMount(loadAll);
+	onMount(() => {
+		loadAll();
+		loadCompetitions();
+	});
 
 	$: if (connectedUser?.userId) {
 		(async () => {
@@ -134,24 +198,6 @@
 		pendingFollow = next;
 	}
 
-	function fmtCountdown(iso: string): string {
-		const ms = new Date(iso).getTime() - Date.now();
-		if (Number.isNaN(ms)) return '—';
-		if (ms <= 0) return 'Ended';
-		const sec = Math.floor(ms / 1000);
-		const d = Math.floor(sec / 86_400);
-		const h = Math.floor((sec % 86_400) / 3600);
-		const m = Math.floor((sec % 3600) / 60);
-		if (d > 0) return `${d}d ${h}h`;
-		if (h > 0) return `${h}h ${m}m`;
-		return `${m}m`;
-	}
-
-	function fmtStartsIn(iso: string): string {
-		const ms = new Date(iso).getTime() - Date.now();
-		if (ms <= 0) return 'Now';
-		return fmtCountdown(iso);
-	}
 </script>
 
 <section class="lb-section">
@@ -314,60 +360,107 @@
 							<span class="comp-dot"></span>
 							<h3>Competition Hub</h3>
 						</div>
-						<span class="comp-tag">BETA</span>
+						<span class="comp-tag">ON-CHAIN</span>
 					</div>
 					<p class="comp-lede">
-						Climb the leaderboard isn't enough? Enter live tournaments, lock in
-						prize pools, and prove your edge against the field.
+						Lock a SOL ticket, trade with a fresh <strong>100,000 USD paper balance</strong>,
+						and battle the field. When the timer runs out the on-chain vault
+						pays the podium automatically.
 					</p>
+
+					<div class="reward-split" aria-label="Reward distribution">
+						<div class="rs-head">
+							<span>PRIZE SPLIT</span>
+							<span class="rs-pool">100% of pool</span>
+						</div>
+						<div class="rs-row gold">
+							<span class="rs-rk">1ST</span>
+							<span class="rs-pct">50%</span>
+							<span class="rs-bar"><span style="width:100%"></span></span>
+						</div>
+						<div class="rs-row silver">
+							<span class="rs-rk">2ND</span>
+							<span class="rs-pct">30%</span>
+							<span class="rs-bar"><span style="width:60%"></span></span>
+						</div>
+						<div class="rs-row bronze">
+							<span class="rs-rk">3RD</span>
+							<span class="rs-pct">15%</span>
+							<span class="rs-bar"><span style="width:30%"></span></span>
+						</div>
+						<div class="rs-row treasury">
+							<span class="rs-rk">TREASURY</span>
+							<span class="rs-pct">5%</span>
+							<span class="rs-bar"><span style="width:10%"></span></span>
+						</div>
+					</div>
 
 					<div class="comp-stats">
 						<div>
-							<strong>{tournaments.filter((t) => t.status === 'live').length}</strong>
+							<strong>{liveComps.length}</strong>
 							<span>LIVE</span>
 						</div>
 						<div>
-							<strong>{tournaments.reduce((acc, t) => acc + t.participants, 0)}</strong>
+							<strong>{totalPlayers}</strong>
 							<span>PLAYERS</span>
 						</div>
 						<div>
-							<strong>$40K</strong>
+							<strong>{fmtPoolSol(totalPoolSol)}</strong>
 							<span>POOLS</span>
 						</div>
 					</div>
 
-					<div class="tournament-list">
-						{#each tournaments as t}
-							<div class="tournament-row">
-								<div class="t-top">
-									<span class="t-tag {t.status}">{t.tag}</span>
-									<span class="t-title">{t.title}</span>
-								</div>
-								<p class="t-desc">{t.description}</p>
-								<div class="t-meta">
-									<div>
-										<span>PRIZE</span>
-										<strong class="prize">{t.prizePool}</strong>
+					{#if compsLoading && competitions.length === 0}
+						<div class="comp-empty">Loading on-chain competitions…</div>
+					{:else if visibleComps.length === 0}
+						<div class="comp-empty">
+							No competitions live right now. Be the first to spin one up.
+						</div>
+					{:else}
+						<div class="tournament-list">
+							{#each visibleComps as t (t.pubkey)}
+								{@const fillPct = t.maxParticipants > 0 ? (t.participantCount / t.maxParticipants) * 100 : 0}
+								<button
+									class="tournament-row"
+									on:click={() => goto(`/competition?cup=${t.pubkey}`)}
+								>
+									<div class="t-top">
+										<span class="t-tag {t.status}">{t.status === 'active' ? 'LIVE' : 'OPEN'}</span>
+										<span class="t-title">{t.name}</span>
 									</div>
-									<div>
-										<span>ENTRY</span>
-										<strong>{t.entryFee}</strong>
+									<div class="t-meta">
+										<div>
+											<span>PRIZE</span>
+											<strong class="prize">{fmtPoolSol(competitionTotalPoolSol(t))}</strong>
+										</div>
+										<div>
+											<span>ENTRY</span>
+											<strong>{fmtEntrySol(t.entryTicketSol)}</strong>
+										</div>
+										<div>
+											<span>{t.status === 'active' ? 'ENDS IN' : 'WAITING'}</span>
+											<strong>
+												{#if t.status === 'active'}
+													{void nowMs}{fmtCountdown(t.endTs)}
+												{:else}
+													{t.maxParticipants - t.participantCount} left
+												{/if}
+											</strong>
+										</div>
 									</div>
-									<div>
-										<span>{t.status === 'live' ? 'ENDS IN' : 'STARTS IN'}</span>
-										<strong>{t.status === 'live' ? fmtCountdown(t.endsAt) : fmtStartsIn(t.startsAt)}</strong>
+									<div class="t-bar">
+										<div class="t-fill" style="width: {Math.min(100, fillPct)}%"></div>
 									</div>
-								</div>
-								<div class="t-bar">
-									<div class="t-fill" style="width: {Math.min(100, (t.participants / t.maxParticipants) * 100)}%"></div>
-								</div>
-								<div class="t-fill-meta">
-									<span>{t.participants} / {t.maxParticipants} traders</span>
-									<span class="status-tag {t.status}">{t.status === 'live' ? 'LIVE' : 'OPEN'}</span>
-								</div>
-							</div>
-						{/each}
-					</div>
+									<div class="t-fill-meta">
+										<span>{t.participantCount} / {t.maxParticipants} traders</span>
+										<span class="status-tag {t.status === 'active' ? 'live' : 'upcoming'}">
+											{t.status === 'active' ? 'LIVE' : 'OPEN'}
+										</span>
+									</div>
+								</button>
+							{/each}
+						</div>
+					{/if}
 
 					<button class="comp-cta" on:click={() => goto('/competition')}>
 						<span>ENTER COMPETITION HUB</span>
@@ -375,7 +468,6 @@
 							<path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M20 12H4" />
 						</svg>
 					</button>
-					<p class="comp-foot">Pre-season — entries free during open beta.</p>
 				</div>
 			</aside>
 		</div>
@@ -652,6 +744,23 @@
 		border: 1px solid #1f1f1f;
 		border-radius: 10px;
 		display: flex; flex-direction: column; gap: 8px;
+		text-align: left;
+		font-family: inherit; color: inherit;
+		cursor: pointer; transition: all 0.15s;
+		width: 100%;
+	}
+	.tournament-row:hover { border-color: rgba(255, 90, 0, 0.4); background: rgba(255, 90, 0, 0.04); }
+
+	.comp-empty {
+		padding: 16px;
+		background: rgba(255,255,255,0.02);
+		border: 1px dashed #2a2a2a;
+		border-radius: 10px;
+		color: #888;
+		font-family: 'Courier New', monospace;
+		font-size: 11px;
+		text-align: center;
+		line-height: 1.5;
 	}
 	.t-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.t-tag {
@@ -662,6 +771,8 @@
 		border: 1px solid rgba(255, 90, 0, 0.4);
 	}
 	.t-tag.upcoming { background: rgba(255,102,204,0.10); color: #ff66cc; border-color: rgba(255,102,204,0.4); }
+	.t-tag.active { background: rgba(0,255,102,0.10); color: #00ff66; border-color: rgba(0,255,102,0.35); }
+	.t-tag.pending { background: rgba(255,102,204,0.10); color: #ff66cc; border-color: rgba(255,102,204,0.4); }
 	.t-title { color: #fff; font-weight: 700; font-size: 13px; }
 	.t-desc { color: #888; font-size: 11px; line-height: 1.5; margin: 0; }
 	.t-meta {
@@ -708,10 +819,48 @@
 	}
 	.comp-cta:hover { background: #ffb733; box-shadow: 0 6px 20px rgba(255, 90, 0, 0.35); transform: translateY(-1px); }
 
-	.comp-foot {
-		text-align: center; color: #555;
-		font-family: 'Courier New', monospace; font-size: 10px; margin: 0;
+	.reward-split {
+		display: flex; flex-direction: column; gap: 6px;
+		padding: 12px;
+		background: rgba(255, 255, 255, 0.02);
+		border: 1px solid #1f1f1f;
+		border-radius: 10px;
 	}
+	.rs-head {
+		display: flex; justify-content: space-between; align-items: baseline;
+		margin-bottom: 2px;
+	}
+	.rs-head span:first-child {
+		color: #ff5a00; font-family: 'Courier New', monospace;
+		font-size: 9px; font-weight: 900; letter-spacing: 0.16em;
+	}
+	.rs-pool { color: #777; font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.1em; }
+	.rs-row {
+		display: grid; grid-template-columns: 64px 44px 1fr;
+		align-items: center; gap: 8px;
+	}
+	.rs-rk {
+		font-family: 'Courier New', monospace;
+		font-size: 10px; font-weight: 900; letter-spacing: 0.12em;
+	}
+	.rs-pct {
+		font-family: 'Courier New', monospace;
+		font-size: 12px; font-weight: 900; text-align: right;
+	}
+	.rs-bar {
+		height: 6px; border-radius: 999px;
+		background: rgba(255, 255, 255, 0.05); overflow: hidden;
+		display: block;
+	}
+	.rs-bar > span { display: block; height: 100%; border-radius: inherit; }
+	.rs-row.gold .rs-rk, .rs-row.gold .rs-pct { color: #ffd24a; }
+	.rs-row.gold .rs-bar > span { background: linear-gradient(90deg, #ffb733, #ffd24a); }
+	.rs-row.silver .rs-rk, .rs-row.silver .rs-pct { color: #cfd8e3; }
+	.rs-row.silver .rs-bar > span { background: linear-gradient(90deg, #8a8e96, #cfd8e3); }
+	.rs-row.bronze .rs-rk, .rs-row.bronze .rs-pct { color: #d68b3d; }
+	.rs-row.bronze .rs-bar > span { background: linear-gradient(90deg, #6a3a1a, #d68b3d); }
+	.rs-row.treasury .rs-rk, .rs-row.treasury .rs-pct { color: #777; }
+	.rs-row.treasury .rs-bar > span { background: #444; }
 
 	@media (max-width: 1100px) {
 		.lb-grid { grid-template-columns: 1fr 340px; }

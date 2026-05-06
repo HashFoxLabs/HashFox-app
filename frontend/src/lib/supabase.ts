@@ -31,6 +31,44 @@ async function fetchUserId(walletAddress: string): Promise<string | null> {
 	return (data as any)?.id ?? null;
 }
 
+export interface PublicProfile {
+	walletAddress: string;
+	username: string | null;
+	avatarUrl: string | null;
+}
+
+/** Bulk lookup so the competition page can render usernames + avatars for an
+ * entire participant list in a single round-trip. Wallets without a row come
+ * back with username/avatarUrl = null. */
+export async function fetchPublicProfiles(
+	walletAddresses: string[]
+): Promise<Map<string, PublicProfile>> {
+	const out = new Map<string, PublicProfile>();
+	const unique = Array.from(new Set(walletAddresses.filter(Boolean)));
+	if (unique.length === 0) return out;
+	for (const w of unique) out.set(w, { walletAddress: w, username: null, avatarUrl: null });
+	const sb = getSupabase();
+	if (!sb) return out;
+	const { data, error } = await sb
+		.from('users')
+		.select('wallet_address, username, avatar_url')
+		.in('wallet_address', unique);
+	if (error) {
+		console.warn('[supabase] public profile bulk fetch error', error.message);
+		return out;
+	}
+	for (const row of (data as any[]) ?? []) {
+		const w = row.wallet_address as string;
+		if (!w) continue;
+		out.set(w, {
+			walletAddress: w,
+			username: (row.username as string | null) ?? null,
+			avatarUrl: (row.avatar_url as string | null) ?? null
+		});
+	}
+	return out;
+}
+
 export async function fetchProfile(walletAddress: string): Promise<UserProfile | null> {
 	const sb = getSupabase();
 	if (!sb) return null;

@@ -164,7 +164,7 @@ export function buildPnlBadgeMap(entries: LeaderboardEntry[]): Map<string, numbe
 export function formatPnlBadge(pct: number | null | undefined): string | null {
 	if (pct == null || !Number.isFinite(pct)) return null;
 	const sign = pct >= 0 ? '+' : '';
-	return `${sign}${pct.toFixed(1)}%`;
+	return `${sign}${pct.toFixed(2)}%`;
 }
 
 /** Hard-coded tournament catalogue used by the competition entry card and

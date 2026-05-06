@@ -57,6 +57,14 @@
 		disconnectStocks
 	} from '$lib/stores/stocksOrderbook';
 	import { syncClosedTradingPositions } from '$lib/social/syncClosedTrades';
+	import {
+		compOpenMarketPosition,
+		compOpenLimitOrder,
+		compCloseTradingPosition,
+		compCancelLimitOrder,
+		fmtCountdown
+	} from '$lib/competition';
+	import { activeCompetition, refreshActiveCompetition } from '$lib/stores/activeCompetition';
 
 	/** Which category this terminal serves. */
 	export let category: MarketCategory = 'crypto';
@@ -74,6 +82,13 @@
 
 	let session: any = {};
 	sessionKey.subscribe((s) => (session = s));
+
+	let comp: any = { pubkey: null, view: null, loaded: false };
+	activeCompetition.subscribe((s) => (comp = s));
+
+	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
+	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
+	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
 
 	const isCrypto = category === 'crypto';
 
@@ -357,37 +372,80 @@
 				stopLoss && parseFloat(stopLoss) > 0 ? priceScaled(parseFloat(stopLoss)) : new BN(0);
 			const marginUsd = usd(requiredMargin);
 
+			if (tournamentPending) {
+				statusMessage = 'Tournament not started yet — waiting for the field to fill.';
+				busy = false;
+				return;
+			}
+			if (tournamentSettled) {
+				statusMessage = 'Tournament settled — claim exit on /competition before trading.';
+				busy = false;
+				return;
+			}
+
 			let sig = '';
 			if (tradingTabUI === 'limit') {
-				sig = await openLimitOrder(program, wallet.publicKey, {
-					marketCategory: subCategoryToVariant(market.sub),
-					pairIndex: market.pairIndex,
-					tradeMode: tradeSurface,
-					direction,
-					marginUsd,
-					leverage: lev,
-					limitPrice: priceScaled(parseFloat(limitPriceInput)),
-					takeProfitPrice: tp,
-					stopLossPrice: sl,
-					sessionToken,
-					signer
-				});
+				if (inTournament && comp.pubkey) {
+					sig = await compOpenLimitOrder(program, wallet.publicKey, comp.pubkey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode: tradeSurface,
+						direction,
+						marginUsd,
+						leverage: lev,
+						limitPrice: priceScaled(parseFloat(limitPriceInput)),
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						sessionToken,
+						signer
+					});
+				} else {
+					sig = await openLimitOrder(program, wallet.publicKey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode: tradeSurface,
+						direction,
+						marginUsd,
+						leverage: lev,
+						limitPrice: priceScaled(parseFloat(limitPriceInput)),
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						sessionToken,
+						signer
+					});
+				}
 			} else {
-				sig = await openMarketPosition(program, wallet.publicKey, {
-					marketCategory: subCategoryToVariant(market.sub),
-					pairIndex: market.pairIndex,
-					tradeMode: tradeSurface,
-					direction,
-					marginUsd,
-					leverage: lev,
-					takeProfitPrice: tp,
-					stopLossPrice: sl,
-					entryPrice: priceScaled(currentPrice),
-					sessionToken,
-					signer
-				});
+				if (inTournament && comp.pubkey) {
+					sig = await compOpenMarketPosition(program, wallet.publicKey, comp.pubkey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode: tradeSurface,
+						direction,
+						marginUsd,
+						leverage: lev,
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						entryPrice: priceScaled(currentPrice),
+						sessionToken,
+						signer
+					});
+				} else {
+					sig = await openMarketPosition(program, wallet.publicKey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode: tradeSurface,
+						direction,
+						marginUsd,
+						leverage: lev,
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						entryPrice: priceScaled(currentPrice),
+						sessionToken,
+						signer
+					});
+				}
 			}
-			statusMessage = `Order submitted · ${sig.slice(0, 8)}…`;
+			statusMessage = `Order submitted${inTournament ? ' · cup' : ''} · ${sig.slice(0, 8)}…`;
 			tradeSize = '';
 			limitPriceInput = '';
 			takeProfit = '';
@@ -427,14 +485,26 @@
 			for (const h of currentSymbolHoldings) {
 				const pos = positions.find((p) => p.pubkey === h.pubkey);
 				if (!pos) continue;
-				await closeTradingPositionRpc(
-					program,
-					wallet.publicKey,
-					new BN(pos.positionId),
-					priceScaled(px),
-					sessionToken,
-					signer
-				);
+				if (inTournament && comp.pubkey) {
+					await compCloseTradingPosition(
+						program,
+						wallet.publicKey,
+						comp.pubkey,
+						new BN(pos.positionId),
+						priceScaled(px),
+						sessionToken,
+						signer
+					);
+				} else {
+					await closeTradingPositionRpc(
+						program,
+						wallet.publicKey,
+						new BN(pos.positionId),
+						priceScaled(px),
+						sessionToken,
+						signer
+					);
+				}
 			}
 			statusMessage = `Sold ${totalQty.toFixed(market.decimals)} ${market.symbol} @ $${px.toFixed(2)}`;
 			tradeSize = '';
@@ -461,24 +531,47 @@
 		try {
 			const { program, signer, sessionToken } = buildTradeRuntime();
 			if (pos.status === 'pending') {
-				await cancelLimitOrderRpc(
-					program,
-					wallet.publicKey,
-					new BN(pos.positionId),
-					sessionToken,
-					signer
-				);
+				if (inTournament && comp.pubkey) {
+					await compCancelLimitOrder(
+						program,
+						wallet.publicKey,
+						comp.pubkey,
+						new BN(pos.positionId),
+						sessionToken,
+						signer
+					);
+				} else {
+					await cancelLimitOrderRpc(
+						program,
+						wallet.publicKey,
+						new BN(pos.positionId),
+						sessionToken,
+						signer
+					);
+				}
 				statusMessage = `Cancelled #${pos.positionId}`;
 			} else {
 				const px = prices[pos.pairSymbol]?.price ?? currentPrice;
-				await closeTradingPositionRpc(
-					program,
-					wallet.publicKey,
-					new BN(pos.positionId),
-					priceScaled(px),
-					sessionToken,
-					signer
-				);
+				if (inTournament && comp.pubkey) {
+					await compCloseTradingPosition(
+						program,
+						wallet.publicKey,
+						comp.pubkey,
+						new BN(pos.positionId),
+						priceScaled(px),
+						sessionToken,
+						signer
+					);
+				} else {
+					await closeTradingPositionRpc(
+						program,
+						wallet.publicKey,
+						new BN(pos.positionId),
+						priceScaled(px),
+						sessionToken,
+						signer
+					);
+				}
 				statusMessage = `Closed #${pos.positionId} at $${px.toFixed(2)}`;
 			}
 			await refreshAccount();
@@ -502,9 +595,37 @@
 			solBalance = await hashfoxClient.getBalance();
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
-				balance = await hashfoxClient.getBalanceBreakdown();
-				setUserBalance(balance);
-				positions = await hashfoxClient.fetchTradingPositions();
+				// Tournament-mode account state lives on the per-comp UserAccount
+				// PDA, so swap the balance + positions source when we're in a cup.
+				if (comp?.pubkey && comp.view) {
+					try {
+						const [{ findCompUserPda, fetchCompTradingPositions }, { USD_SCALE }] =
+							await Promise.all([import('$lib/competition'), import('$lib/hashfox')]);
+						const program = hashfoxClient.getProgram();
+						if (program) {
+							const [compUserPda] = findCompUserPda(comp.pubkey, wallet.publicKey);
+							const compAcc = await (program.account as any).userAccount.fetch(compUserPda);
+							const total = Number(compAcc.usdBalance.toString()) / USD_SCALE;
+							const locked = Number(compAcc.lockedMarginUsd.toString()) / USD_SCALE;
+							balance = {
+								totalUsd: total,
+								lockedUsd: locked,
+								availableUsd: Math.max(0, total - locked)
+							};
+							setUserBalance(balance);
+							positions = await fetchCompTradingPositions(program, comp.pubkey, wallet.publicKey);
+						}
+					} catch (err) {
+						console.warn('[terminal] comp balance load failed', err);
+						balance = await hashfoxClient.getBalanceBreakdown();
+						setUserBalance(balance);
+						positions = await hashfoxClient.fetchTradingPositions();
+					}
+				} else {
+					balance = await hashfoxClient.getBalanceBreakdown();
+					setUserBalance(balance);
+					positions = await hashfoxClient.fetchTradingPositions();
+				}
 				const addr = wallet.publicKey?.toBase58?.();
 				if (addr && positions.length > 0) {
 					void syncClosedTradingPositions(addr, positions);
@@ -649,6 +770,26 @@
 </script>
 
 <div class="pro">
+	{#if comp.view}
+		<div class="comp-banner {comp.view.status}">
+			<div class="cb-left">
+				<span class="cb-dot"></span>
+				<span class="cb-tag">TOURNAMENT MODE</span>
+				<span class="cb-name">{comp.view.name}</span>
+				<span class="cb-creator">creator {comp.view.creator.slice(0, 4)}…{comp.view.creator.slice(-4)}</span>
+			</div>
+			<div class="cb-right">
+				{#if comp.view.status === 'active'}
+					<span class="cb-meta">Ends in {fmtCountdown(comp.view.endTs)}</span>
+				{:else if comp.view.status === 'pending'}
+					<span class="cb-meta">Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants})</span>
+				{:else}
+					<span class="cb-meta">Settled — claim exit on /competition</span>
+				{/if}
+				<a class="cb-link" href="/competition?cup={comp.pubkey?.toBase58()}">Open hub →</a>
+			</div>
+		</div>
+	{/if}
 	<!-- Market tabs strip + balance display -->
 	<div class="market-strip">
 		<div class="market-line">
@@ -1954,6 +2095,29 @@
 	}
 	.hr-side-long { background: rgba(0, 255, 100, 0.14); color: #00ff64; }
 	.hr-side-short { background: rgba(255, 68, 68, 0.14); color: #ff4444; }
+
+	.comp-banner {
+		display: flex; justify-content: space-between; align-items: center;
+		gap: 12px; flex-wrap: wrap;
+		padding: 10px 14px;
+		margin: 10px;
+		border-radius: 8px;
+		background: linear-gradient(180deg, rgba(0, 255, 102, 0.06), rgba(255, 255, 255, 0.01));
+		border: 1px solid rgba(0, 255, 102, 0.4);
+	}
+	.comp-banner.pending { background: linear-gradient(180deg, rgba(255, 90, 0, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 90, 0, 0.4); }
+	.comp-banner.settled { background: linear-gradient(180deg, rgba(255, 102, 204, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 102, 204, 0.4); }
+	.cb-left, .cb-right { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+	.cb-dot { width: 7px; height: 7px; border-radius: 50%; background: #00ff66; box-shadow: 0 0 8px rgba(0, 255, 102, 0.7); }
+	.comp-banner.pending .cb-dot { background: #ff5a00; box-shadow: 0 0 8px rgba(255, 90, 0, 0.7); }
+	.comp-banner.settled .cb-dot { background: #ff66cc; box-shadow: 0 0 8px rgba(255, 102, 204, 0.7); }
+	.cb-tag { color: #00ff66; font-family: 'Courier New', monospace; font-size: 9px; font-weight: 900; letter-spacing: 0.18em; }
+	.comp-banner.pending .cb-tag { color: #ff5a00; }
+	.comp-banner.settled .cb-tag { color: #ff66cc; }
+	.cb-name { color: #fff; font-family: 'Courier New', monospace; font-size: 12px; font-weight: 800; }
+	.cb-creator, .cb-meta { color: #aaa; font-family: 'Courier New', monospace; font-size: 10px; }
+	.cb-link { color: #ff5a00; text-decoration: none; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; }
+	.cb-link:hover { color: #ffb733; }
 
 	@media (max-width: 1100px) {
 		.main-grid {

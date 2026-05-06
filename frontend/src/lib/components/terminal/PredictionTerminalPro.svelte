@@ -31,6 +31,12 @@
 		type BalanceBreakdown,
 		type PredictionPositionAccount
 	} from '$lib/hashfox';
+	import {
+		compBuyYes,
+		compBuyNo,
+		fmtCountdown
+	} from '$lib/competition';
+	import { activeCompetition, refreshActiveCompetition } from '$lib/stores/activeCompetition';
 
 	type Side = 'Yes' | 'No';
 	type Tab = 'Buy' | 'Sell';
@@ -52,6 +58,13 @@
 
 	let session: any = {};
 	sessionKey.subscribe((s) => (session = s));
+
+	let comp: any = { pubkey: null, view: null, loaded: false };
+	activeCompetition.subscribe((s) => (comp = s));
+
+	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
+	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
+	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
 
 	let events: PolyEvent[] = [];
 	let statsEvents: PolyEvent[] = [];
@@ -290,6 +303,15 @@
 			return;
 		}
 
+		if (tradeTab === 'Buy' && tournamentPending) {
+			statusMessage = 'Tournament not started — waiting for the field to fill.';
+			return;
+		}
+		if (tradeTab === 'Buy' && tournamentSettled) {
+			statusMessage = 'Tournament settled — claim exit on /competition.';
+			return;
+		}
+
 		busy = true;
 		statusMessage = 'Submitting…';
 		try {
@@ -314,16 +336,29 @@
 			let sig = '';
 			if (tradeTab === 'Buy') {
 				const marketId = (selectedMarket.id || selectedEvent?.slug || '').slice(0, 128);
-				const fn = selectedSide === 'Yes' ? buyYes : buyNo;
-				sig = await fn(program, wallet.publicKey, {
-					marketId,
-					amountUsd: usd(amount),
-					pricePerShare: priceScaled(priceDec),
-					stopLoss: stopLoss > 0 ? priceScaled(stopLoss / 100) : new BN(0),
-					takeProfit: takeProfit > 0 ? priceScaled(takeProfit / 100) : new BN(0),
-					sessionToken,
-					signer
-				});
+				if (inTournament && comp.pubkey) {
+					const fn = selectedSide === 'Yes' ? compBuyYes : compBuyNo;
+					sig = await fn(program, wallet.publicKey, comp.pubkey, {
+						marketId,
+						amountUsd: usd(amount),
+						pricePerShare: priceScaled(priceDec),
+						stopLoss: stopLoss > 0 ? priceScaled(stopLoss / 100) : new BN(0),
+						takeProfit: takeProfit > 0 ? priceScaled(takeProfit / 100) : new BN(0),
+						sessionToken,
+						signer
+					});
+				} else {
+					const fn = selectedSide === 'Yes' ? buyYes : buyNo;
+					sig = await fn(program, wallet.publicKey, {
+						marketId,
+						amountUsd: usd(amount),
+						pricePerShare: priceScaled(priceDec),
+						stopLoss: stopLoss > 0 ? priceScaled(stopLoss / 100) : new BN(0),
+						takeProfit: takeProfit > 0 ? priceScaled(takeProfit / 100) : new BN(0),
+						sessionToken,
+						signer
+					});
+				}
 				if (selectedMarket.question) {
 					rememberPredictionMarketName(marketId, selectedMarket.question);
 				}
@@ -448,6 +483,25 @@
 </script>
 
 <div class="pred-pro">
+	{#if comp.view}
+		<div class="comp-banner {comp.view.status}">
+			<div class="cb-left">
+				<span class="cb-dot"></span>
+				<span class="cb-tag">TOURNAMENT MODE</span>
+				<span class="cb-name">{comp.view.name}</span>
+			</div>
+			<div class="cb-right">
+				{#if comp.view.status === 'active'}
+					<span class="cb-meta">Ends in {fmtCountdown(comp.view.endTs)}</span>
+				{:else if comp.view.status === 'pending'}
+					<span class="cb-meta">Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants})</span>
+				{:else}
+					<span class="cb-meta">Settled — claim exit on /competition</span>
+				{/if}
+				<a class="cb-link" href="/competition?cup={comp.pubkey?.toBase58()}">Open hub →</a>
+			</div>
+		</div>
+	{/if}
 	{#if !selectedEvent}
 		<!-- EVENTS LIST VIEW -->
 		<div class="list-wrap">
@@ -1967,4 +2021,27 @@
 		.events-grid { grid-template-columns: 1fr; }
 		.bs-row { grid-template-columns: repeat(2, 1fr); }
 	}
+
+	.comp-banner {
+		display: flex; justify-content: space-between; align-items: center;
+		gap: 12px; flex-wrap: wrap;
+		padding: 10px 14px;
+		margin: 10px;
+		border-radius: 8px;
+		background: linear-gradient(180deg, rgba(0, 255, 102, 0.06), rgba(255, 255, 255, 0.01));
+		border: 1px solid rgba(0, 255, 102, 0.4);
+	}
+	.comp-banner.pending { background: linear-gradient(180deg, rgba(255, 90, 0, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 90, 0, 0.4); }
+	.comp-banner.settled { background: linear-gradient(180deg, rgba(255, 102, 204, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 102, 204, 0.4); }
+	.cb-left, .cb-right { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+	.cb-dot { width: 7px; height: 7px; border-radius: 50%; background: #00ff66; box-shadow: 0 0 8px rgba(0, 255, 102, 0.7); }
+	.comp-banner.pending .cb-dot { background: #ff5a00; box-shadow: 0 0 8px rgba(255, 90, 0, 0.7); }
+	.comp-banner.settled .cb-dot { background: #ff66cc; box-shadow: 0 0 8px rgba(255, 102, 204, 0.7); }
+	.cb-tag { color: #00ff66; font-family: 'Courier New', monospace; font-size: 9px; font-weight: 900; letter-spacing: 0.18em; }
+	.comp-banner.pending .cb-tag { color: #ff5a00; }
+	.comp-banner.settled .cb-tag { color: #ff66cc; }
+	.cb-name { color: #fff; font-family: 'Courier New', monospace; font-size: 12px; font-weight: 800; }
+	.cb-meta { color: #aaa; font-family: 'Courier New', monospace; font-size: 10px; }
+	.cb-link { color: #ff5a00; text-decoration: none; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 900; }
+	.cb-link:hover { color: #ffb733; }
 </style>
