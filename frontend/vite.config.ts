@@ -48,6 +48,7 @@ export default defineConfig({
 		]
 	},
 	optimizeDeps: {
+		exclude: ['monaco-editor'],
 		esbuildOptions: {
 			conditions: ['browser', 'module', 'import', 'default'],
 			target: 'esnext'
