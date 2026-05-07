@@ -79,7 +79,7 @@
 		font-family: 'Share Tech Mono', monospace;
 		letter-spacing: 0.18em;
 		font-size: 11px;
-		color: #ff9500;
+		color: #ff5a00;
 	}
 	.header-sub {
 		margin: 0;
@@ -110,9 +110,9 @@
 		color: inherit;
 	}
 	.card:hover {
-		border-color: rgba(255, 149, 0, 0.5);
+		border-color: rgba(255, 90, 0, 0.5);
 		background: #0c0c0c;
-		box-shadow: 0 0 28px rgba(255, 149, 0, 0.07);
+		box-shadow: 0 0 28px rgba(255, 90, 0, 0.07);
 	}
 
 	.card-top {
@@ -134,9 +134,9 @@
 		letter-spacing: 0.05em;
 	}
 	.card-badge.hf {
-		background: rgba(255, 149, 0, 0.12);
-		border: 1px solid rgba(255, 149, 0, 0.3);
-		color: #ff9500;
+		background: rgba(255, 90, 0, 0.12);
+		border: 1px solid rgba(255, 90, 0, 0.3);
+		color: #ff5a00;
 	}
 	.card-badge.lr {
 		background: rgba(99, 179, 237, 0.1);
@@ -186,7 +186,7 @@
 		transition: color 0.15s;
 	}
 	.card:hover .card-cta {
-		color: #ff9500;
+		color: #ff5a00;
 	}
 
 	@media (max-width: 640px) {

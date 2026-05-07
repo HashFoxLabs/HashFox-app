@@ -52,8 +52,7 @@
   #
   #   row["price"]      float  — last traded price
   #   row["market"]     str    — market name, e.g. "BTCUSDT"
-  #   row["volume"]     float  — tick volume
-  #   row["side"]       str    — "buy" or "sell"
+  #   row["qty"]     float  — tick volume
   #   row["timestamp"]  int    — Unix ms  →  divide by 1000 for seconds
   #
   #   portfolio.cash            — available cash
@@ -66,6 +65,7 @@
   #
   # Return:
   #   signal = {"action": "BUY" | "SELL" | "HOLD", "quantity": float}
+  #   Updated user_perso_parameter
   #
   # No imports allowed in the sandbox.
   # ─── Select a strategy from the panel on the right, or write your own ──
@@ -133,49 +133,49 @@
 				'editor.foreground': '#e8e8e8',
 				'editor.lineHighlightBackground': '#0d0d0d',
 				'editor.lineHighlightBorder': '#00000000',
-				'editor.selectionBackground': '#ff950030',
-				'editor.inactiveSelectionBackground': '#ff950018',
-				'editor.findMatchBackground': '#ff950044',
-				'editor.findMatchHighlightBackground': '#ff950022',
-				'editorCursor.foreground': '#ff9500',
+				'editor.selectionBackground': '#ff5a0030',
+				'editor.inactiveSelectionBackground': '#ff5a0018',
+				'editor.findMatchBackground': '#ff5a0044',
+				'editor.findMatchHighlightBackground': '#ff5a0022',
+				'editorCursor.foreground': '#ff5a00',
 				'editorCursor.background': '#040404',
 				'editorLineNumber.foreground': '#2e3440',
-				'editorLineNumber.activeForeground': '#ff9500',
+				'editorLineNumber.activeForeground': '#ff5a00',
 				'editorWhitespace.foreground': '#1e1e1e',
 				'editorIndentGuide.background1': '#161616',
 				'editorIndentGuide.activeBackground1': '#2a2a2a',
-				'editorBracketMatch.background': '#ff950018',
-				'editorBracketMatch.border': '#ff950055',
-				'editorBracketHighlight.foreground1': '#ff9500',
+				'editorBracketMatch.background': '#ff5a0018',
+				'editorBracketMatch.border': '#ff5a0055',
+				'editorBracketHighlight.foreground1': '#ff5a00',
 				'editorBracketHighlight.foreground2': '#82aaff',
 				'editorBracketHighlight.foreground3': '#c3e88d',
 				'editorGutter.background': '#040404',
 				'editorStickyScroll.background': '#060606',
 				'editorStickyScrollHover.background': '#0d0d0d',
 				'minimap.background': '#040404',
-				'minimap.selectionHighlight': '#ff950044',
-				'scrollbarSlider.background': '#ff950018',
-				'scrollbarSlider.hoverBackground': '#ff950038',
-				'scrollbarSlider.activeBackground': '#ff950055',
+				'minimap.selectionHighlight': '#ff5a0044',
+				'scrollbarSlider.background': '#ff5a0018',
+				'scrollbarSlider.hoverBackground': '#ff5a0038',
+				'scrollbarSlider.activeBackground': '#ff5a0055',
 				'editorWidget.background': '#0d0d0d',
 				'editorWidget.border': '#1a1a1a',
 				'editorSuggestWidget.background': '#0d0d0d',
 				'editorSuggestWidget.border': '#1a1a1a',
 				'editorSuggestWidget.foreground': '#e8e8e8',
-				'editorSuggestWidget.selectedBackground': '#ff950022',
+				'editorSuggestWidget.selectedBackground': '#ff5a0022',
 				'editorSuggestWidget.selectedForeground': '#e8e8e8',
-				'editorSuggestWidget.highlightForeground': '#ff9500',
-				'editorSuggestWidget.focusHighlightForeground': '#ff9500',
+				'editorSuggestWidget.highlightForeground': '#ff5a00',
+				'editorSuggestWidget.focusHighlightForeground': '#ff5a00',
 				'editorHoverWidget.background': '#0d0d0d',
 				'editorHoverWidget.border': '#1a1a1a',
 				'editorHoverWidget.foreground': '#e8e8e8',
 				'input.background': '#0a0a0a',
 				'input.border': '#222222',
 				'input.foreground': '#e8e8e8',
-				'focusBorder': '#ff950055',
-				'list.hoverBackground': '#ff950010',
-				'list.activeSelectionBackground': '#ff950022',
-				'list.inactiveSelectionBackground': '#ff950010',
+				'focusBorder': '#ff5a0055',
+				'list.hoverBackground': '#ff5a0010',
+				'list.activeSelectionBackground': '#ff5a0022',
+				'list.inactiveSelectionBackground': '#ff5a0010',
 			}
 		} as MonacoType.editor.IStandaloneThemeData);
 
@@ -671,13 +671,13 @@
 		font-family: 'Share Tech Mono', monospace;
 		cursor: pointer;
 	}
-	.back-btn:hover { border-color: rgba(255,149,0,0.5); color: #ff9500; }
+	.back-btn:hover { border-color: rgba(255, 90, 0,0.5); color: #ff5a00; }
 	.section-label {
 		flex: 1;
 		font-family: 'Share Tech Mono', monospace;
 		letter-spacing: 0.1em;
 		font-size: 10px;
-		color: #ff9500;
+		color: #ff5a00;
 		text-align: center;
 	}
 	.toggle-btn {
@@ -701,7 +701,7 @@
 		overflow: auto;
 		min-height: 0;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(255,149,0,0.25) transparent;
+		scrollbar-color: rgba(255, 90, 0,0.25) transparent;
 	}
 	.preview-tbl {
 		width: 100%;
@@ -713,7 +713,7 @@
 		position: sticky;
 		top: 0;
 		background: #060606;
-		color: #ff9500;
+		color: #ff5a00;
 		padding: 6px 8px;
 		text-align: left;
 		border-bottom: 1px solid #1a1a1a;
@@ -780,7 +780,7 @@
 		font-family: 'Share Tech Mono', monospace;
 		font-size: 10px;
 		letter-spacing: 0.12em;
-		color: #ff9500;
+		color: #ff5a00;
 		flex-shrink: 0;
 	}
 	.gallery-list {
@@ -791,7 +791,7 @@
 		flex-direction: column;
 		gap: 6px;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(255,149,0,0.25) transparent;
+		scrollbar-color: rgba(255, 90, 0,0.25) transparent;
 	}
 	.strategy-card {
 		background: #0a0a0a;
@@ -811,8 +811,8 @@
 		background: #111;
 	}
 	.strategy-card.active {
-		border-color: rgba(255,149,0,0.55);
-		background: rgba(255,149,0,0.04);
+		border-color: rgba(255, 90, 0,0.55);
+		background: rgba(255, 90, 0,0.04);
 	}
 	.sc-top {
 		display: flex;
@@ -826,7 +826,7 @@
 		color: #e8e8e8;
 		line-height: 1.3;
 	}
-	.strategy-card.active .sc-name { color: #ff9500; }
+	.strategy-card.active .sc-name { color: #ff5a00; }
 	.sc-badge {
 		font-family: 'Share Tech Mono', monospace;
 		font-size: 9px;
@@ -836,7 +836,7 @@
 		flex-shrink: 0;
 	}
 	.sc-badge--beginner     { background: rgba(38,166,91,0.12);  color: #26a65b; border: 1px solid rgba(38,166,91,0.3); }
-	.sc-badge--intermediate { background: rgba(255,149,0,0.12);  color: #ff9500; border: 1px solid rgba(255,149,0,0.3); }
+	.sc-badge--intermediate { background: rgba(255, 90, 0,0.12);  color: #ff5a00; border: 1px solid rgba(255, 90, 0,0.3); }
 	.sc-badge--advanced     { background: rgba(239,83,80,0.1);   color: #ef5350; border: 1px solid rgba(239,83,80,0.25); }
 	.sc-desc {
 		margin: 0;
@@ -857,8 +857,8 @@
 		flex-shrink: 0;
 	}
 	.btn.run {
-		background: linear-gradient(180deg, rgba(249,115,22,0.95), rgba(249,115,22,0.72));
-		border: 1px solid rgba(249,115,22,0.6);
+		background: linear-gradient(180deg, rgba(255, 90, 0, 0.95), rgba(255, 90, 0, 0.72));
+		border: 1px solid rgba(255, 90, 0, 0.6);
 		color: #000;
 		font-weight: 700;
 		padding: 7px 14px;
@@ -883,7 +883,7 @@
 		font-family: 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
 		font-size: 13px;
 		line-height: 22px;
-		color: #ff9500;
+		color: #ff5a00;
 		flex-shrink: 0;
 		user-select: none;
 	}
@@ -919,16 +919,16 @@
 	}
 	.sb-item { color: #666; white-space: nowrap; }
 	.sb-sep { color: #2a2a2a; }
-	.sb-lang { color: #ff9500; opacity: 0.7; }
+	.sb-lang { color: #ff5a00; opacity: 0.7; }
 	.sb-errors { color: #ef5350; }
 	.sb-dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: #ff9500;
+		background: #ff5a00;
 		flex-shrink: 0;
 		margin-left: auto;
-		box-shadow: 0 0 6px rgba(255,149,0,0.5);
+		box-shadow: 0 0 6px rgba(255, 90, 0,0.5);
 	}
 
 	/* Params */
@@ -969,7 +969,7 @@
 		font-family: 'Share Tech Mono', monospace;
 		font-size: 12px;
 	}
-	input:focus { border-color: rgba(255,149,0,0.4); }
+	input:focus { border-color: rgba(255, 90, 0,0.4); }
 
 	.date-info {
 		display: flex;

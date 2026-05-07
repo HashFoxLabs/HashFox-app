@@ -259,10 +259,10 @@
 	.progress-track { width: 100%; height: 3px; background: #1a1a1a; border-radius: 2px; overflow: hidden; }
 	.progress-fill {
 		height: 100%;
-		background: linear-gradient(90deg, #f97316, #fb923c);
+		background: linear-gradient(90deg, #ff5a00, #ff7a30);
 		border-radius: 2px;
 		transition: width 0.4s ease;
-		box-shadow: 0 0 8px rgba(249,115,22,0.5);
+		box-shadow: 0 0 8px rgba(255, 90, 0, 0.5);
 	}
 	.progress-steps { display: flex; align-items: center; gap: 6px; font-family: 'Share Tech Mono', monospace; font-size: 10px; }
 	.step-label { color: #333; transition: color 0.3s; }

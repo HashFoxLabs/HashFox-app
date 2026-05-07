@@ -441,12 +441,12 @@
 		cursor: pointer;
 		white-space: nowrap;
 	}
-	.back-btn:hover { border-color: rgba(255, 149, 0, 0.5); color: #ff9500; }
+	.back-btn:hover { border-color: rgba(255, 90, 0, 0.5); color: #ff5a00; }
 	.section-label {
 		font-family: 'Share Tech Mono', monospace;
 		letter-spacing: 0.12em;
 		font-size: 11px;
-		color: #ff9500;
+		color: #ff5a00;
 	}
 
 	.source-tabs {
@@ -468,8 +468,8 @@
 		transition: color 0.15s, border-color 0.15s;
 	}
 	.source-tab.active {
-		color: #ff9500;
-		border-bottom-color: #ff9500;
+		color: #ff5a00;
+		border-bottom-color: #ff5a00;
 	}
 	.source-tab:hover:not(.active) { color: #ccc; }
 
@@ -490,7 +490,7 @@
 		outline: none;
 		box-sizing: border-box;
 	}
-	.search:focus { border-color: rgba(255,149,0,0.5); }
+	.search:focus { border-color: rgba(255, 90, 0,0.5); }
 	.search::placeholder { color: #444; }
 
 	.market-list {
@@ -501,7 +501,7 @@
 		flex-direction: column;
 		gap: 4px;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(255,149,0,0.3) transparent;
+		scrollbar-color: rgba(255, 90, 0,0.3) transparent;
 	}
 	.market-item {
 		display: flex;
@@ -517,11 +517,11 @@
 		transition: border-color 0.12s, background 0.12s;
 	}
 	.market-item:hover:not(.unavailable) { border-color: #333; background: #111; }
-	.market-item.selected { border-color: rgba(255,149,0,0.6); background: rgba(255,149,0,0.05); }
+	.market-item.selected { border-color: rgba(255, 90, 0,0.6); background: rgba(255, 90, 0,0.05); }
 	.market-item.unavailable { opacity: 0.35; cursor: not-allowed; }
 	.market-name { font-size: 12px; font-weight: 600; }
 	.market-meta { font-size: 10px; color: #555; font-family: 'Share Tech Mono', monospace; }
-	.market-item.selected .market-meta { color: rgba(255,149,0,0.6); }
+	.market-item.selected .market-meta { color: rgba(255, 90, 0,0.6); }
 
 	.state-msg { padding: 14px 8px; font-size: 12px; color: #666; font-family: 'Share Tech Mono', monospace; }
 	.state-msg.error { color: #ef5350; }
@@ -565,7 +565,7 @@
 		outline: none;
 		width: 110px;
 	}
-	.date-input:focus { border-color: rgba(255,149,0,0.4); }
+	.date-input:focus { border-color: rgba(255, 90, 0,0.4); }
 	.date-input::placeholder { color: #444; }
 
 	.btn {
@@ -582,8 +582,8 @@
 	.btn:disabled { opacity: 0.4; cursor: not-allowed; }
 	.btn.visualize:not(:disabled):hover { border-color: rgba(255,255,255,0.3); }
 	.btn.proceed {
-		background: linear-gradient(180deg, rgba(249,115,22,0.95), rgba(249,115,22,0.72));
-		border-color: rgba(249,115,22,0.6);
+		background: linear-gradient(180deg, rgba(255, 90, 0, 0.95), rgba(255, 90, 0, 0.72));
+		border-color: rgba(255, 90, 0, 0.6);
 		color: #000;
 		font-weight: 700;
 	}
@@ -600,13 +600,13 @@
 	.dim { color: #555; font-size: 12px; font-family: 'Share Tech Mono', monospace; margin: 0; }
 	.chips { display: flex; flex-wrap: wrap; gap: 6px; }
 	.chip {
-		background: rgba(255,149,0,0.1);
-		border: 1px solid rgba(255,149,0,0.4);
+		background: rgba(255, 90, 0,0.1);
+		border: 1px solid rgba(255, 90, 0,0.4);
 		border-radius: 999px;
 		padding: 3px 10px;
 		font-size: 11px;
 		font-family: 'Share Tech Mono', monospace;
-		color: #ff9500;
+		color: #ff5a00;
 	}
 	.path-count { font-size: 11px; color: #666; font-family: 'Share Tech Mono', monospace; }
 
@@ -662,7 +662,7 @@
 		flex: 1;
 		overflow: auto;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(255,149,0,0.3) transparent;
+		scrollbar-color: rgba(255, 90, 0,0.3) transparent;
 	}
 	.preview-tbl {
 		width: 100%;
@@ -674,7 +674,7 @@
 		position: sticky;
 		top: 0;
 		background: #000;
-		color: #ff9500;
+		color: #ff5a00;
 		padding: 8px 10px;
 		text-align: left;
 		border-bottom: 1px solid #1a1a1a;
