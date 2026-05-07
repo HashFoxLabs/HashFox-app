@@ -52,7 +52,7 @@
 		height: 48px;
 	}
 	.logo-text {
-		color: #ff9500;
+		color: #ff5a00;
 		letter-spacing: 2px;
 	}
 	.nav-links {
@@ -71,7 +71,7 @@
 		color: #000;
 	}
 	.nav-link.active {
-		color: #ff9500;
+		color: #ff5a00;
 	}
 	.nav-wallet {
 		display: flex;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Leaderboard from '$lib/components/social/Leaderboard.svelte';
 	import SocialFeed from '$lib/components/social/SocialFeed.svelte';
 	import NewsDiscoveryPanel from '$lib/components/NewsDiscoveryPanel.svelte';
 	import BacktestingTerminal from '$lib/components/backtesting/BacktestingTerminal.svelte';
@@ -6,6 +7,7 @@
 </script>
 
 <main class="landing">
+	<Leaderboard />
 	<SocialFeed />
 	<NewsDiscoveryPanel />
 	<AlertFeed />

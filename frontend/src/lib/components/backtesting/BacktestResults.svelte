@@ -395,8 +395,12 @@
 		font-family: 'Share Tech Mono', monospace;
 		cursor: pointer;
 	}
-	.btn:hover { border-color: rgba(255,149,0,0.5); color: #ff9500; }
-
+	.btn:hover { border-color: rgba(255, 90, 0,0.6); }
+	.hint {
+		color: #777;
+		font-size: 11px;
+		line-height: 1.35;
+	}
 	.tabs {
 		display: flex;
 		gap: 8px;
@@ -416,8 +420,10 @@
 		font-size: 10px;
 		letter-spacing: 0.08em;
 	}
-	.tab.active { color: #ff9500; border-color: rgba(255,149,0,0.5); }
-
+	.tab.active {
+		color: #ff5a00;
+		border-color: rgba(255, 90, 0,0.6);
+	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -433,7 +439,7 @@
 	}
 	.ph {
 		font-family: 'Share Tech Mono', monospace;
-		color: #ff9500;
+		color: #ff5a00;
 		letter-spacing: 0.12em;
 		font-size: 10px;
 		margin-bottom: 10px;

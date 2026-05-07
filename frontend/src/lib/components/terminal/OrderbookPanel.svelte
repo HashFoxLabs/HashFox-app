@@ -111,7 +111,7 @@
 		gap: 8px;
 	}
 	.title {
-		color: #ff9500;
+		color: #ff5a00;
 		font-family: 'Courier New', monospace;
 		font-size: 11px;
 		letter-spacing: 0.18em;
@@ -134,6 +134,7 @@
 	.t {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 10px;
 		font-family: 'Courier New', monospace;
@@ -142,7 +143,7 @@
 		letter-spacing: 0.12em;
 		cursor: pointer;
 	}
-	.t.active { border-color: #ff9500; color: #ff9500; background: rgba(255,149,0,0.06); }
+	.t.active { border-color: #ff5a00; color: #ff5a00; background: rgba(255, 90, 0,0.06); }
 	.t:hover { border-color: #444; color: #ccc; }
 
 	.grid {

@@ -2,6 +2,7 @@
   "name": "hashfox",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.8.0",
   "description": "HashFox — unified paper-trading platform bundling PolyMock (Polymarket), Blockberg (crypto), and MockRock (traditional markets).",
   "repository": {
     "type": "git",
@@ -9,11 +10,11 @@
   },
   "scripts": {
     "install": "npm run install:frontend",
-    "install:frontend": "npm --prefix frontend install --legacy-peer-deps",
-    "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
-    "preview": "npm --prefix frontend run preview",
-    "check": "npm --prefix frontend run check",
+    "install:frontend": "pnpm --dir frontend install",
+    "dev": "pnpm --dir frontend dev",
+    "build": "pnpm --dir frontend build",
+    "preview": "pnpm --dir frontend preview",
+    "check": "pnpm --dir frontend check",
 
     "anchor:build": "cd contracts && anchor build",
     "anchor:test": "cd contracts && anchor test",

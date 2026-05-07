@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { pythPrices } from '$lib/stores/pythPrices';
+	import { findMarket } from '$lib/markets';
 	import {
 		createChart,
 		CandlestickSeries,
@@ -16,6 +17,7 @@
 	export let symbol: string = 'SOL';
 	export let interval: string = '1m';
 
+	/** Bucket size in seconds for live aggregation. */
 	const INTERVALS: Record<string, number> = {
 		'1m': 60,
 		'5m': 300,
@@ -23,6 +25,15 @@
 		'1h': 3600,
 		'4h': 14400,
 		'1d': 86400
+	};
+	/** Resolution code expected by the Pyth Benchmarks TradingView UDF. */
+	const PYTH_RES: Record<string, string> = {
+		'1m': '1',
+		'5m': '5',
+		'15m': '15',
+		'1h': '60',
+		'4h': '240',
+		'1d': 'D'
 	};
 	const DEFAULT_BARS: Record<string, number> = {
 		'1m': 480,
@@ -40,23 +51,84 @@
 	let currentBar: CandlestickData<Time> | null = null;
 	let unsubPrices: (() => void) | undefined;
 	let activeKey = '';
+	let loadError = '';
 
 	function barTime(ts: number, bucketSec: number): Time {
 		return (Math.floor(ts / 1000 / bucketSec) * bucketSec) as Time;
 	}
 
+	/** Map a market symbol to the Pyth Benchmarks UDF symbol identifier. */
+	function pythBenchmarksSymbol(sym: string): string | null {
+		const m = findMarket(sym);
+		if (!m) return `Crypto.${sym}/USD`;
+		switch (m.sub) {
+			case 'crypto':
+				return `Crypto.${sym}/USD`;
+			case 'stock':
+			case 'equity':
+				return `Equity.US.${sym}/USD`;
+			case 'metal':
+				// XAUUSD → Metal.XAU/USD
+				return `Metal.${sym.slice(0, 3)}/USD`;
+			case 'forex': {
+				// EURUSD → FX.EUR/USD ; USDJPY → FX.USD/JPY
+				const base = sym.slice(0, 3);
+				const quote = sym.slice(3, 6);
+				return `FX.${base}/${quote}`;
+			}
+			default:
+				return null;
+		}
+	}
+
+	function priceFormatFor(sym: string): Partial<CandlestickSeriesOptions>['priceFormat'] {
+		const m = findMarket(sym);
+		const decimals = m?.decimals ?? 4;
+		const minMove = Math.pow(10, -decimals);
+		return { type: 'price', precision: decimals, minMove };
+	}
+
+	function quoteFor(sym: string): string {
+		const m = findMarket(sym);
+		return m?.quote ?? 'USD';
+	}
+
 	async function fetchCandles(sym: string, iv: string): Promise<CandlestickData<Time>[]> {
-		const url = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=${iv}&limit=1000`;
-		const res = await fetch(url);
-		if (!res.ok) throw new Error(`Binance ${res.status}`);
-		const raw: any[][] = await res.json();
-		return raw.map((k) => ({
-			time: Math.floor(Number(k[0]) / 1000) as Time,
-			open: parseFloat(k[1]),
-			high: parseFloat(k[2]),
-			low: parseFloat(k[3]),
-			close: parseFloat(k[4])
-		}));
+		const pythSym = pythBenchmarksSymbol(sym);
+		if (!pythSym) throw new Error(`No Pyth symbol for ${sym}`);
+		const res = PYTH_RES[iv] ?? '15';
+		const bars = DEFAULT_BARS[iv] ?? 200;
+		const bucket = INTERVALS[iv] ?? 900;
+		const now = Math.floor(Date.now() / 1000);
+		// Pull ~3× the visible window so we have history for scroll-back.
+		const from = now - bucket * Math.max(bars * 3, 600);
+		const url = `https://benchmarks.pyth.network/v1/shims/tradingview/history?symbol=${encodeURIComponent(
+			pythSym
+		)}&resolution=${res}&from=${from}&to=${now}`;
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`Pyth Benchmarks ${response.status}`);
+		const data = (await response.json()) as {
+			s: string;
+			t?: number[];
+			o?: number[];
+			h?: number[];
+			l?: number[];
+			c?: number[];
+		};
+		if (data.s !== 'ok' || !data.t || !data.o || !data.h || !data.l || !data.c) {
+			return [];
+		}
+		const out: CandlestickData<Time>[] = [];
+		for (let i = 0; i < data.t.length; i++) {
+			out.push({
+				time: data.t[i] as Time,
+				open: data.o[i],
+				high: data.h[i],
+				low: data.l[i],
+				close: data.c[i]
+			});
+		}
+		return out;
 	}
 
 	async function initChart(sym: string, iv: string) {
@@ -69,6 +141,7 @@
 			currentBar = null;
 		}
 		activeKey = key;
+		loadError = '';
 
 		chart = createChart(container, {
 			autoSize: true,
@@ -102,7 +175,7 @@
 			borderDownColor: '#ff4560',
 			wickUpColor: '#00c076',
 			wickDownColor: '#ff4560',
-			priceFormat: { type: 'price', precision: 4, minMove: 0.0001 }
+			priceFormat: priceFormatFor(sym)
 		} satisfies Partial<CandlestickSeriesOptions>);
 
 		try {
@@ -115,9 +188,11 @@
 				const from = Math.max(0, to - bars);
 				chart.timeScale().setVisibleLogicalRange({ from, to: to + 3 });
 				currentBar = { ...candles[candles.length - 1] };
+			} else if (candleSeries) {
+				loadError = 'No history available';
 			}
-		} catch {
-			// ignore
+		} catch (err) {
+			loadError = err instanceof Error ? err.message : 'Load failed';
 		}
 	}
 
@@ -165,6 +240,8 @@
 			initChart(symbol, interval).then(subscribePrices);
 		}
 	}
+
+	$: quote = quoteFor(symbol);
 </script>
 
 <div class="wrap">
@@ -175,7 +252,10 @@
 			</button>
 		{/each}
 		<span class="spacer"></span>
-		<span class="sym">{symbol}/USDT</span>
+		{#if loadError}
+			<span class="err">{loadError}</span>
+		{/if}
+		<span class="sym">{symbol}/{quote}</span>
 	</div>
 	<div class="chart" bind:this={container}></div>
 </div>
@@ -201,6 +281,7 @@
 	.iv {
 		background: #000;
 		border: 1px solid #222;
+		border-radius: 6px;
 		color: #888;
 		padding: 6px 10px;
 		font-family: 'Courier New', monospace;
@@ -210,12 +291,18 @@
 		cursor: pointer;
 	}
 	.iv.active {
-		border-color: #ff9500;
-		color: #ff9500;
-		background: rgba(255, 149, 0, 0.06);
+		border-color: #ff5a00;
+		color: #ff5a00;
+		background: rgba(255, 90, 0, 0.06);
 	}
 	.iv:hover { border-color: #444; color: #ccc; }
 	.spacer { flex: 1; }
+	.err {
+		font-family: 'Courier New', monospace;
+		font-size: 10px;
+		color: #ff8a4d;
+		letter-spacing: 0.04em;
+	}
 	.sym {
 		font-family: 'Courier New', monospace;
 		font-size: 11px;
@@ -228,4 +315,3 @@
 		min-height: 360px;
 	}
 </style>
-

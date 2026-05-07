@@ -124,9 +124,9 @@
 		font-family: 'Courier New', monospace;
 	}
 	.pt:hover { border-color: #444; }
-	.pt.active { border-color: #ff9500; background: rgba(255,149,0,0.06); }
-	.s { font-weight: 900; letter-spacing: 0.08em; font-size: 11px; color: #ff9500; }
-	.pt.active .s { color: #ff9500; }
+	.pt.active { border-color: #ff5a00; background: rgba(255, 90, 0,0.06); }
+	.s { font-weight: 900; letter-spacing: 0.08em; font-size: 11px; color: #ff5a00; }
+	.pt.active .s { color: #ff5a00; }
 	.p { font-weight: 900; font-size: 11px; color: #e8e8e8; }
 
 	.grid {

@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { SYNTHESIS_API_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 
 const SYNTHESIS_API_BASE = 'https://synthesis.trade/api/v1';
@@ -23,6 +23,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!markets || !Array.isArray(markets) || markets.length === 0) {
 			return json({ error: 'No markets provided' }, { status: 400 });
 		}
+		const SYNTHESIS_API_KEY = env.SYNTHESIS_API_KEY;
 		if (!SYNTHESIS_API_KEY) {
 			return json(
 				{

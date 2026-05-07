@@ -40,6 +40,8 @@ const emptyBook = (): OrderBookData => ({ asks: [], bids: [], spreadAbs: 0, spre
 export const binanceOrderBook = writable<OrderBookData>(emptyBook());
 export const binanceTrades = writable<TradeRow[]>([]);
 export const binanceStatus = writable('Disconnected');
+/** Tab symbol (e.g. BTC) for the active Binance stream — for cross-page live marks. */
+export const binanceStreamingSymbol = writable<string>('');
 
 let ws: WebSocket | null = null;
 let currentSymbol = '';
@@ -92,6 +94,8 @@ export function connectBinance(tabSymbol: string): void {
 	if (!binanceSym) return;
 
 	if (currentSymbol === binanceSym && ws && ws.readyState === WebSocket.OPEN) return;
+
+	binanceStreamingSymbol.set(tabSymbol);
 
 	if (reconnectTimer) {
 		clearTimeout(reconnectTimer);
@@ -164,6 +168,7 @@ export function disconnectBinance(): void {
 		ws = null;
 	}
 	currentSymbol = '';
+	binanceStreamingSymbol.set('');
 	binanceStatus.set('Disconnected');
 }
 

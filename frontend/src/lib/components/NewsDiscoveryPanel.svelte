@@ -230,13 +230,13 @@
 		transition: all 0.15s ease;
 	}
 	.tab:hover {
-		border-color: #ff9500;
+		border-color: #ff5a00;
 		color: #fff;
 	}
 	.tab.active {
-		border-color: #ff9500;
-		background: rgba(255, 149, 0, 0.08);
-		color: #ff9500;
+		border-color: #ff5a00;
+		background: rgba(255, 90, 0, 0.08);
+		color: #ff5a00;
 	}
 
 	.grid {
@@ -248,7 +248,7 @@
 	}
 	.panel {
 		border: 1px solid #333;
-		border-radius: 0;
+		border-radius: 10px;
 		background: #0a0a0a;
 		overflow: hidden;
 		height: 560px;
@@ -272,7 +272,7 @@
 		font-size: 11px;
 		font-weight: 800;
 		letter-spacing: 0.18em;
-		color: #ff9500;
+		color: #ff5a00;
 	}
 	.ph-meta {
 		font-family: 'Courier New', monospace;
@@ -318,7 +318,7 @@
 		transition: border-color 0.12s ease, background 0.12s ease;
 	}
 	.item:hover { border-color: #444; background: rgba(255,255,255,0.03); }
-	.item.active { border-color: rgba(255,149,0,0.9); background: rgba(255,149,0,0.06); }
+	.item.active { border-color: rgba(255, 90, 0,0.9); background: rgba(255, 90, 0,0.06); }
 	.meta {
 		display: flex;
 		align-items: center;
@@ -366,9 +366,9 @@
 		font-size: 11px;
 		font-weight: 800;
 		letter-spacing: 0.06em;
-		color: #ff9500;
-		border: 1px solid rgba(255,149,0,0.35);
-		background: rgba(255,149,0,0.08);
+		color: #ff5a00;
+		border: 1px solid rgba(255, 90, 0,0.35);
+		background: rgba(255, 90, 0,0.08);
 		padding: 4px 8px;
 		border-radius: 999px;
 	}
@@ -389,7 +389,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		text-decoration: none;
 		font-weight: 800;
@@ -397,7 +397,7 @@
 		padding: 10px 12px;
 		font-family: 'Courier New', monospace;
 		letter-spacing: 0.06em;
-		border: 1px solid #ff9500;
+		border: 1px solid #ff5a00;
 		transition: background 0.15s ease;
 	}
 	.btn:hover { background: #ffb733; border-color: #ffb733; }

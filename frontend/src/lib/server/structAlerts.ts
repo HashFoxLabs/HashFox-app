@@ -1,5 +1,4 @@
 import { env } from '$env/dynamic/private';
-import WebSocket from 'ws';
 
 export interface AlertEvent {
 	id: string;
@@ -67,6 +66,17 @@ async function enrichAndDispatch(alert: AlertEvent) {
 	for (const cb of subscribers) cb(alert);
 }
 
+async function messageDataToString(data: unknown): Promise<string | null> {
+	if (typeof data === 'string') return data;
+	if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+	if (ArrayBuffer.isView(data)) {
+		const v = data as ArrayBufferView;
+		return new TextDecoder().decode(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+	}
+	if (data instanceof Blob) return data.text();
+	return null;
+}
+
 function connect() {
 	const apiKey = env.STRUCT_API_KEY;
 	if (!apiKey) {
@@ -76,7 +86,7 @@ function connect() {
 
 	ws = new WebSocket(`wss://api.struct.to/ws/alerts?api-key=${apiKey}`);
 
-	ws.on('open', () => {
+	ws.addEventListener('open', () => {
 		console.log('[structAlerts] Connected to Struct WebSocket');
 
 		for (const sub of SUBSCRIPTIONS) {
@@ -90,36 +100,45 @@ function connect() {
 		}, PING_INTERVAL_MS);
 	});
 
-	ws.on('message', (raw: Buffer | string) => {
-		try {
-			const data = JSON.parse(raw.toString());
-			console.log('[structAlerts] message:', JSON.stringify(data).slice(0, 200));
+	ws.addEventListener('message', (ev: MessageEvent) => {
+		void (async () => {
+			try {
+				const raw = await messageDataToString(ev.data);
+				if (raw == null) return;
 
-			if (data.type === 'pong' || data.op === 'subscribed' || data.op === 'unsubscribed' || data.error) return;
-			if (!data.event) return;
+				const data = JSON.parse(raw);
+				console.log('[structAlerts] message:', JSON.stringify(data).slice(0, 200));
 
-			const alert: AlertEvent = {
-				id: crypto.randomUUID(),
-				event: data.event,
-				data: data.data ?? {},
-				receivedAt: data.timestamp ?? Date.now()
-			};
+				if (data.type === 'pong' || data.op === 'subscribed' || data.op === 'unsubscribed' || data.error) return;
+				if (!data.event) return;
 
-			enrichAndDispatch(alert);
-		} catch {
-			// ignore malformed messages
-		}
+				const alert: AlertEvent = {
+					id: crypto.randomUUID(),
+					event: data.event,
+					data: data.data ?? {},
+					receivedAt: data.timestamp ?? Date.now()
+				};
+
+				await enrichAndDispatch(alert);
+			} catch {
+				// ignore malformed messages
+			}
+		})();
 	});
 
-	ws.on('close', () => {
+	ws.addEventListener('close', () => {
 		console.warn('[structAlerts] WebSocket closed — reconnecting in 5s');
 		cleanup();
 		setTimeout(connect, RECONNECT_DELAY_MS);
 	});
 
-	ws.on('error', (err) => {
-		console.error('[structAlerts] WebSocket error:', err.message);
-		ws?.terminate();
+	ws.addEventListener('error', () => {
+		console.error('[structAlerts] WebSocket error');
+		try {
+			ws?.close();
+		} catch {
+			/* ignore */
+		}
 	});
 }
 
@@ -140,10 +159,9 @@ export function getCachedAlerts(): AlertEvent[] {
 	return [...alertCache];
 }
 
+/** Call from `/api/alerts` (or another server entry) — avoids opening WS during `vite build`. */
 export function initStructAlerts() {
 	if (initialized) return;
 	initialized = true;
 	connect();
 }
-
-initStructAlerts();

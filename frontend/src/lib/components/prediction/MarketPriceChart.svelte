@@ -15,7 +15,7 @@
 	];
 
 	const COLORS = [
-		'#ff9500',
+		'#ff5a00',
 		'#00ff64',
 		'#3b82f6',
 		'#a855f7',
@@ -342,14 +342,14 @@
 		letter-spacing: 0.03em;
 	}
 	.mpc-iv:hover { border-color: #333; color: #888; }
-	.mpc-iv.active { border-color: #ff9500; color: #ff9500; background: rgba(255, 149, 0, 0.08); }
+	.mpc-iv.active { border-color: #ff5a00; color: #ff5a00; background: rgba(255, 90, 0, 0.08); }
 
 	.mpc-spinner {
 		width: 13px;
 		height: 13px;
 		margin-left: auto;
 		border: 2px solid #1a1a1a;
-		border-top-color: #ff9500;
+		border-top-color: #ff5a00;
 		border-radius: 50%;
 		animation: mpc-spin 0.7s linear infinite;
 	}

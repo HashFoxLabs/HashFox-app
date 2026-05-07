@@ -1,0 +1,33 @@
+# Cloudflare Workers (Git integration: build `npm run build`, deploy `npx wrangler deploy`, root `/frontend`).
+# Matches https://svelte.dev/docs/kit/adapter-cloudflare — Workers + Static Assets.
+#
+# For Cloudflare Pages (Git) instead: no wrangler deploy step — set build output to `.svelte-kit/cloudflare` only.
+
+name = "hashfox-app"
+main = ".svelte-kit/cloudflare/_worker.js"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_als", "nodejs_compat"]
+
+[assets]
+binding = "ASSETS"
+directory = ".svelte-kit/cloudflare"
+
+# Runtime config. Ships with every deploy so the app does not depend on
+# dashboard env vars being present. Public + private API keys are committed
+# here intentionally — promote any genuinely high-risk key to a Worker secret
+# (`wrangler secret put NAME`) later if you want to remove it from the repo.
+[vars]
+PUBLIC_HASHFOX_PROGRAM_ID = "7ApsvRSqfqCA5YbSSvAmeboFFU7hyB2HJBCpEiwmLSSi"
+PUBLIC_SOLANA_RPC = "https://api.devnet.solana.com"
+PUBLIC_MAGICBLOCK_RPC = "https://rpc.magicblock.app/devnet/"
+PUBLIC_HERMES_URL = "https://hermes.pyth.network"
+PUBLIC_PYTH_API_KEY = "EA7FQ1WkaQuM38PJE26TZXpD6fjwmKrVGBo7pX2chFVZ"
+PUBLIC_SUPABASE_URL = "https://fzrwnfojyvdpvrkcybte.supabase.co"
+PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6cnduZm9qeXZkcHZya2N5YnRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwMTIyOTUsImV4cCI6MjA4ODU4ODI5NX0.vTabFKkFKmynTWJ9J8qy7_pfDUql7INZfVGyTkk-PII"
+PUBLIC_WEB3AUTH_CLIENT_ID = "BH9FFGqsSKFPr99UPOlyQucWWWnHAOl6cWK0mOVZWs8z9m_ozje8meMlRivm75hpJB7xH8dipOOxLwpZR0yel1M"
+PUBLIC_STREAM_API_KEY = "x6vp4qbgd2sj"
+BACKTEST_ENGINE_URL = "https://polymock-backtest.fly.dev"
+SYNTHESIS_API_KEY = "sk_WFu6dQRbFMywoqLXKFcHSkfVpbEB2xRdw0pPwAHeYis"
+STREAM_API_SECRET = "rujyk6c87xcxcf9v3rscyupv3f9mszbfdrtd7ecs6p9unx7enf2827dbufhyp6hh"
+NEWDATA_API_KEY = "pub_02ec6b1e7a5a4ab29d466889dbf64140"
+STRUCT_API_KEY = "d63d52068286b6e110e432d51407017e"

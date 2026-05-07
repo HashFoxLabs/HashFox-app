@@ -105,8 +105,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -204,8 +203,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -307,8 +305,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -325,6 +322,83 @@
         {
           "name": "session_token",
           "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_competition_exit",
+      "docs": [
+        "Clear `active_competition` on the user's main account once the",
+        "competition has settled, unblocking them to join the next one."
+      ],
+      "discriminator": [
+        100,
+        111,
+        70,
+        154,
+        137,
+        100,
+        45,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "relations": [
+            "user_account"
+          ]
+        },
+        {
+          "name": "user",
+          "signer": true
         }
       ],
       "args": []
@@ -379,8 +453,7 @@
               },
               {
                 "kind": "account",
-                "path": "position.owner",
-                "account": "PredictionPosition"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -478,8 +551,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -560,8 +632,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -584,6 +655,1546 @@
         {
           "name": "current_price",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_buy_no",
+      "discriminator": [
+        146,
+        197,
+        162,
+        170,
+        56,
+        103,
+        16,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.total_prediction_positions",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": "string"
+        },
+        {
+          "name": "amount_usd",
+          "type": "u64"
+        },
+        {
+          "name": "price_per_share",
+          "type": "u64"
+        },
+        {
+          "name": "stop_loss",
+          "type": "u64"
+        },
+        {
+          "name": "take_profit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_buy_yes",
+      "discriminator": [
+        121,
+        243,
+        61,
+        244,
+        194,
+        9,
+        74,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.total_prediction_positions",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": "string"
+        },
+        {
+          "name": "amount_usd",
+          "type": "u64"
+        },
+        {
+          "name": "price_per_share",
+          "type": "u64"
+        },
+        {
+          "name": "stop_loss",
+          "type": "u64"
+        },
+        {
+          "name": "take_profit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_cancel_limit_order",
+      "discriminator": [
+        207,
+        31,
+        150,
+        44,
+        122,
+        181,
+        198,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "comp_close_prediction_auto",
+      "discriminator": [
+        255,
+        96,
+        173,
+        0,
+        45,
+        59,
+        198,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "PredictionPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "position.owner",
+                "account": "PredictionPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_close_prediction_position",
+      "discriminator": [
+        96,
+        54,
+        123,
+        189,
+        48,
+        212,
+        189,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "PredictionPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_close_trading_position",
+      "discriminator": [
+        102,
+        106,
+        18,
+        175,
+        8,
+        168,
+        138,
+        183
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_execute_tp_sl",
+      "discriminator": [
+        171,
+        120,
+        8,
+        30,
+        167,
+        167,
+        213,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "position.owner",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_fill_limit_order",
+      "discriminator": [
+        15,
+        121,
+        10,
+        87,
+        3,
+        145,
+        28,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "position.owner",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_liquidate_position",
+      "discriminator": [
+        111,
+        130,
+        252,
+        60,
+        240,
+        7,
+        130,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "position.owner",
+                "account": "TradingPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_open_limit_order",
+      "discriminator": [
+        153,
+        168,
+        166,
+        194,
+        91,
+        251,
+        177,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.total_trading_positions",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_category",
+          "type": {
+            "defined": {
+              "name": "MarketCategory"
+            }
+          }
+        },
+        {
+          "name": "pair_index",
+          "type": "u8"
+        },
+        {
+          "name": "trade_mode",
+          "type": {
+            "defined": {
+              "name": "TradeMode"
+            }
+          }
+        },
+        {
+          "name": "direction",
+          "type": {
+            "defined": {
+              "name": "Direction"
+            }
+          }
+        },
+        {
+          "name": "margin_usd",
+          "type": "u64"
+        },
+        {
+          "name": "leverage",
+          "type": "u8"
+        },
+        {
+          "name": "limit_price",
+          "type": "u64"
+        },
+        {
+          "name": "take_profit_price",
+          "type": "u64"
+        },
+        {
+          "name": "stop_loss_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_open_market_position",
+      "discriminator": [
+        113,
+        165,
+        189,
+        96,
+        177,
+        34,
+        215,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.total_trading_positions",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_category",
+          "type": {
+            "defined": {
+              "name": "MarketCategory"
+            }
+          }
+        },
+        {
+          "name": "pair_index",
+          "type": "u8"
+        },
+        {
+          "name": "trade_mode",
+          "type": {
+            "defined": {
+              "name": "TradeMode"
+            }
+          }
+        },
+        {
+          "name": "direction",
+          "type": {
+            "defined": {
+              "name": "Direction"
+            }
+          }
+        },
+        {
+          "name": "margin_usd",
+          "type": "u64"
+        },
+        {
+          "name": "leverage",
+          "type": "u8"
+        },
+        {
+          "name": "take_profit_price",
+          "type": "u64"
+        },
+        {
+          "name": "stop_loss_price",
+          "type": "u64"
+        },
+        {
+          "name": "entry_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_sell_no",
+      "discriminator": [
+        2,
+        103,
+        55,
+        238,
+        184,
+        83,
+        165,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "PredictionPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "shares_to_sell",
+          "type": "u64"
+        },
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "comp_sell_yes",
+      "discriminator": [
+        183,
+        231,
+        144,
+        153,
+        91,
+        186,
+        184,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.active_competition",
+                "account": "UserAccount"
+              },
+              {
+                "kind": "account",
+                "path": "user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "account",
+                "path": "position.position_id",
+                "account": "PredictionPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "shares_to_sell",
+          "type": "u64"
+        },
+        {
+          "name": "current_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "create_competition",
+      "docs": [
+        "Create a new competition. The creator only configures it — they don't",
+        "auto-join, and they have no privileged role afterwards. Status starts",
+        "as `Pending` and flips to `Active` automatically once `participant_count",
+        "* entry_ticket_lamports >= target_lamports` in `join_competition`."
+      ],
+      "discriminator": [
+        110,
+        212,
+        234,
+        212,
+        118,
+        128,
+        158,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "SOL escrow PDA. System-owned account; rent-exempt deposit happens",
+            "via `system_program::transfer` on first join."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "entry_ticket_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "target_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "duration_secs",
+          "type": "i64"
         }
       ]
     },
@@ -635,8 +2246,7 @@
               },
               {
                 "kind": "account",
-                "path": "position.owner",
-                "account": "TradingPosition"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -728,8 +2338,7 @@
               },
               {
                 "kind": "account",
-                "path": "position.owner",
-                "account": "TradingPosition"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -901,6 +2510,142 @@
       ]
     },
     {
+      "name": "join_competition",
+      "docs": [
+        "Join a competition: pay entry ticket → competition vault, init the",
+        "per-comp `UserAccount` with 100k virtual balance, mark the user's main",
+        "account as in-comp. If this entry fills the target, status flips to",
+        "`Active` and `end_ts` is stamped — no creator action needed."
+      ],
+      "discriminator": [
+        9,
+        202,
+        251,
+        16,
+        34,
+        54,
+        85,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "comp_user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "liquidate_position",
       "discriminator": [
         187,
@@ -948,8 +2693,7 @@
               },
               {
                 "kind": "account",
-                "path": "position.owner",
-                "account": "TradingPosition"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -992,6 +2736,62 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "migrate_user_account",
+      "docs": [
+        "One-time migration: reallocates pre-competition `UserAccount`s that",
+        "were created before the `active_competition: Pubkey` field was added,",
+        "and zero-initialises the new trailing 32 bytes (= `Pubkey::default()`).",
+        "No-op on already-migrated accounts."
+      ],
+      "discriminator": [
+        198,
+        152,
+        90,
+        54,
+        134,
+        206,
+        92,
+        198
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "docs": [
+            "predate the `active_competition` field. Validated via the seeds",
+            "constraint, which proves the account is the user's own UserAccount PDA."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "open_limit_order",
@@ -1050,8 +2850,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -1181,8 +2980,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -1305,6 +3103,93 @@
       ]
     },
     {
+      "name": "report_score",
+      "docs": [
+        "Permissionless: anyone can submit a participant's current `usd_balance`",
+        "for inclusion in the comp's running top-3 cache. The PDA derivation of",
+        "`comp_user_account` is checked by Anchor (seeds = `[b\"comp_user\", comp,",
+        "owner]`), so there's no spoofing — caller can only submit a real comp",
+        "participant's real on-chain balance."
+      ],
+      "discriminator": [
+        20,
+        221,
+        243,
+        145,
+        13,
+        98,
+        48,
+        2
+      ],
+      "accounts": [
+        {
+          "name": "competition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "comp_user_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              },
+              {
+                "kind": "account",
+                "path": "comp_user_account.owner",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "docs": [
+            "Permissionless caller — pays the tx fee."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "sell_no",
       "discriminator": [
         189,
@@ -1355,8 +3240,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -1437,8 +3321,7 @@
               },
               {
                 "kind": "account",
-                "path": "user_account.owner",
-                "account": "UserAccount"
+                "path": "user_account"
               },
               {
                 "kind": "account",
@@ -1467,9 +3350,139 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "settle_competition",
+      "docs": [
+        "Permissionless: callable after `end_ts`. Pays 50/30/15/5 from the vault",
+        "PDA to top-3 + treasury and flips status to `Settled`. Empty podium",
+        "slots route to treasury so funds never get stuck."
+      ],
+      "discriminator": [
+        83,
+        121,
+        9,
+        141,
+        170,
+        133,
+        230,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "competition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "first_place",
+          "writable": true
+        },
+        {
+          "name": "second_place",
+          "writable": true
+        },
+        {
+          "name": "third_place",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
+    {
+      "name": "Competition",
+      "discriminator": [
+        193,
+        49,
+        76,
+        118,
+        106,
+        22,
+        221,
+        106
+      ]
+    },
     {
       "name": "PredictionPosition",
       "discriminator": [
@@ -1548,6 +3561,71 @@
         125,
         73,
         11
+      ]
+    },
+    {
+      "name": "CompetitionCreated",
+      "discriminator": [
+        20,
+        172,
+        54,
+        140,
+        71,
+        253,
+        74,
+        235
+      ]
+    },
+    {
+      "name": "CompetitionExitClaimed",
+      "discriminator": [
+        13,
+        126,
+        194,
+        1,
+        142,
+        178,
+        240,
+        99
+      ]
+    },
+    {
+      "name": "CompetitionJoined",
+      "discriminator": [
+        240,
+        57,
+        122,
+        163,
+        144,
+        48,
+        47,
+        204
+      ]
+    },
+    {
+      "name": "CompetitionSettled",
+      "discriminator": [
+        255,
+        156,
+        63,
+        104,
+        211,
+        74,
+        119,
+        153
+      ]
+    },
+    {
+      "name": "CompetitionStarted",
+      "discriminator": [
+        241,
+        197,
+        148,
+        5,
+        184,
+        166,
+        186,
+        110
       ]
     },
     {
@@ -1639,6 +3717,19 @@
         2,
         35,
         49
+      ]
+    },
+    {
+      "name": "ScoreReported",
+      "discriminator": [
+        199,
+        252,
+        82,
+        205,
+        107,
+        108,
+        14,
+        75
       ]
     },
     {
@@ -1781,6 +3872,81 @@
       "code": 6019,
       "name": "MarketIdTooLong",
       "msg": "Market id exceeds maximum length of 128 chars"
+    },
+    {
+      "code": 6020,
+      "name": "CompetitionNameInvalid",
+      "msg": "Competition name must be 1..=32 bytes"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidEntryTicket",
+      "msg": "Entry ticket must be greater than zero"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidTargetAllocation",
+      "msg": "Target allocation must be a multiple of the entry ticket and allow at least 3 participants"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidCompetitionDuration",
+      "msg": "Competition duration must be between 3 and 21 days"
+    },
+    {
+      "code": 6024,
+      "name": "CompetitionNotJoinable",
+      "msg": "Competition is not accepting joiners"
+    },
+    {
+      "code": 6025,
+      "name": "CompetitionFull",
+      "msg": "Competition is full"
+    },
+    {
+      "code": 6026,
+      "name": "AlreadyInCompetition",
+      "msg": "User is already in another competition"
+    },
+    {
+      "code": 6027,
+      "name": "CompetitionNotActive",
+      "msg": "Competition is not active"
+    },
+    {
+      "code": 6028,
+      "name": "CompetitionEnded",
+      "msg": "Competition has ended"
+    },
+    {
+      "code": 6029,
+      "name": "CompetitionNotEnded",
+      "msg": "Competition has not yet ended"
+    },
+    {
+      "code": 6030,
+      "name": "CompetitionNotSettled",
+      "msg": "Competition has not been settled"
+    },
+    {
+      "code": 6031,
+      "name": "NotInThisCompetition",
+      "msg": "User account is not in this competition"
+    },
+    {
+      "code": 6032,
+      "name": "PodiumAccountMismatch",
+      "msg": "Provided podium account does not match the leaderboard cache"
+    },
+    {
+      "code": 6033,
+      "name": "InvalidTreasuryAccount",
+      "msg": "Treasury account does not match config"
+    },
+    {
+      "code": 6034,
+      "name": "PrizePoolMath",
+      "msg": "Prize pool arithmetic overflow"
     }
   ],
   "types": [
@@ -1823,6 +3989,282 @@
           },
           {
             "name": "Liquidation"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Competition",
+      "docs": [
+        "Onchain trading competition. Holds config, escrow accounting and the",
+        "running top-3. SOL escrow is stored on a separate vault PDA so the program",
+        "can sign payouts at settle time."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "Fixed-size name (right-padded with zeros). Length tracked separately."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "name_len",
+            "type": "u8"
+          },
+          {
+            "name": "entry_ticket_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "target_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "duration_secs",
+            "type": "i64"
+          },
+          {
+            "name": "start_ts",
+            "docs": [
+              "Stamped on auto-start (when target is reached). 0 while pending."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "end_ts",
+            "docs": [
+              "`start_ts + duration_secs`. 0 while pending."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "CompetitionStatus"
+              }
+            }
+          },
+          {
+            "name": "participant_count",
+            "type": "u64"
+          },
+          {
+            "name": "max_participants",
+            "type": "u64"
+          },
+          {
+            "name": "prize_pool",
+            "docs": [
+              "Lamports collected so far (running tally as users join)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "top",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "LeaderEntry"
+                  }
+                },
+                3
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompetitionCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry_ticket_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "target_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "duration_secs",
+            "type": "i64"
+          },
+          {
+            "name": "max_participants",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompetitionExitClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "participant",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompetitionJoined",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "participant",
+            "type": "pubkey"
+          },
+          {
+            "name": "participant_count",
+            "type": "u64"
+          },
+          {
+            "name": "prize_pool",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompetitionSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "first",
+            "type": "pubkey"
+          },
+          {
+            "name": "first_amount",
+            "type": "u64"
+          },
+          {
+            "name": "second",
+            "type": "pubkey"
+          },
+          {
+            "name": "second_amount",
+            "type": "u64"
+          },
+          {
+            "name": "third",
+            "type": "pubkey"
+          },
+          {
+            "name": "third_amount",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompetitionStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "start_ts",
+            "type": "i64"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "participant_count",
+            "type": "u64"
+          },
+          {
+            "name": "prize_pool",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompetitionStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Settled"
           }
         ]
       }
@@ -1877,6 +4319,25 @@
           {
             "name": "executor",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeaderEntry",
+      "docs": [
+        "One slot of the top-3 leaderboard cached on `Competition`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "participant",
+            "type": "pubkey"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
           }
         ]
       }
@@ -2248,6 +4709,39 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoreReported",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "participant",
+            "type": "pubkey"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "top",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "LeaderEntry"
+                  }
+                },
+                3
+              ]
+            }
           }
         ]
       }
@@ -2665,6 +5159,15 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "active_competition",
+            "docs": [
+              "Pubkey::default() when not in a competition. Set on `join_competition`,",
+              "cleared on `claim_competition_exit` after the comp settles. Enforces",
+              "\"one active competition at a time\" per user."
+            ],
+            "type": "pubkey"
           }
         ]
       }

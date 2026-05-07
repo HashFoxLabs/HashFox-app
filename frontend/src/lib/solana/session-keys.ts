@@ -10,6 +10,7 @@ import { AnchorProvider, BN, Program, type Idl } from '$lib/vendor/anchor';
 import { sessionIdl } from '@magicblock-labs/bolt-sdk/lib/generated';
 import bs58 from 'bs58';
 import { SOLANA_RPC, HASHFOX_PROGRAM_ID } from '$lib/env';
+import { sessionKey } from '$lib/stores/sessionKey';
 
 export const SESSION_KEYS_PROGRAM_ID = new PublicKey('KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5');
 
@@ -225,6 +226,7 @@ export class SessionKeyManager {
 				validUntil,
 				createdAt: Math.floor(Date.now() / 1000)
 			});
+			this.publishToStore();
 
 			return { sessionTokenPDA, sessionKeypair };
 		} finally {
@@ -316,6 +318,35 @@ export class SessionKeyManager {
 		if (typeof localStorage !== 'undefined') {
 			localStorage.removeItem(SESSION_STORAGE_KEY);
 		}
+		sessionKey.set({ active: false, signer: null, token: null, validUntil: 0 });
+	}
+
+	/** Reset only the in-memory store (e.g. on wallet disconnect) without
+	 *  touching the persisted localStorage session — the user may reconnect. */
+	resetStore(): void {
+		sessionKey.set({ active: false, signer: null, token: null, validUntil: 0 });
+	}
+
+	/** Push the persisted session into the Svelte store so consumers (terminals)
+	 *  know the session is active without having to call this manager directly. */
+	publishToStore(): void {
+		const session = this.loadSession();
+		if (!session || this.isExpired(session)) {
+			sessionKey.set({ active: false, signer: null, token: null, validUntil: 0 });
+			return;
+		}
+		const sk = new Uint8Array(session.secretKey);
+		if (sk.length !== 64) {
+			sessionKey.set({ active: false, signer: null, token: null, validUntil: 0 });
+			return;
+		}
+		const kp = Keypair.fromSecretKey(sk);
+		sessionKey.set({
+			active: true,
+			signer: kp.publicKey,
+			token: new PublicKey(session.sessionTokenPDA),
+			validUntil: session.validUntil
+		});
 	}
 
 	private isExpired(session: StoredSession): boolean {

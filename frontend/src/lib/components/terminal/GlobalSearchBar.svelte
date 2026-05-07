@@ -265,7 +265,7 @@
 		padding: 0 10px;
 		transition: border-color 0.15s;
 	}
-	.gsb-input-wrap.focused { border-color: #ff9500; }
+	.gsb-input-wrap.focused { border-color: #ff5a00; }
 	.gsb-icon { color: #666; font-size: 14px; }
 	.gsb-input {
 		flex: 1;
@@ -289,7 +289,7 @@
 		padding: 2px 6px;
 		line-height: 1;
 	}
-	.gsb-clear:hover { color: #ff9500; }
+	.gsb-clear:hover { color: #ff5a00; }
 
 	.gsb-dropdown {
 		position: absolute;
@@ -309,7 +309,7 @@
 		font-size: 9px;
 		font-weight: 900;
 		letter-spacing: 0.14em;
-		color: #ff9500;
+		color: #ff5a00;
 		text-transform: uppercase;
 		background: #050505;
 		position: sticky;
@@ -332,8 +332,8 @@
 		font-family: inherit;
 		font-size: 11px;
 	}
-	.gsb-row.active { background: rgba(255, 149, 0, 0.08); }
-	.gsb-row:hover { background: rgba(255, 149, 0, 0.06); }
+	.gsb-row.active { background: rgba(255, 90, 0, 0.08); }
+	.gsb-row:hover { background: rgba(255, 90, 0, 0.06); }
 	.gsb-tag {
 		font-size: 9px;
 		font-weight: 900;
@@ -344,7 +344,7 @@
 		color: #888;
 		flex-shrink: 0;
 	}
-	.gsb-tag-crypto { background: rgba(255, 149, 0, 0.15); color: #ff9500; }
+	.gsb-tag-crypto { background: rgba(255, 90, 0, 0.15); color: #ff5a00; }
 	.gsb-tag-traditional { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
 	.gsb-tag-prediction { background: rgba(0, 255, 100, 0.12); color: #00ff64; }
 	.gsb-sym {
@@ -413,7 +413,7 @@
 		width: 12px;
 		height: 12px;
 		border: 2px solid #222;
-		border-top-color: #ff9500;
+		border-top-color: #ff5a00;
 		border-radius: 50%;
 		animation: gsb-spin 0.7s linear infinite;
 	}

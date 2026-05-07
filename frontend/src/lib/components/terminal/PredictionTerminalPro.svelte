@@ -7,12 +7,16 @@
 	import { polymarketClient, type PolyEvent, type PolyMarket } from '$lib/polymarket';
 	import { pendingPredictionEvent } from '$lib/stores/pendingPredictionEvent';
 	import { hashfoxClient } from '$lib/hashfoxClient';
+	import { sessionKeyManager } from '$lib/solana/session-keys';
+	import { setUserBalance, clearUserBalance } from '$lib/stores/userBalance';
+	import { rememberPredictionMarketName } from '$lib/stores/predictionMarketNames';
 	import MarketPriceChart from '$lib/components/prediction/MarketPriceChart.svelte';
 	import OrderBook from '$lib/components/prediction/OrderBook.svelte';
 	import MarketRules from '$lib/components/prediction/MarketRules.svelte';
 	import {
 		buildConnection,
 		buildProgram,
+		buildKeypairProgram,
 		buyYes,
 		buyNo,
 		sellYes,
@@ -27,6 +31,12 @@
 		type BalanceBreakdown,
 		type PredictionPositionAccount
 	} from '$lib/hashfox';
+	import {
+		compBuyYes,
+		compBuyNo,
+		fmtCountdown
+	} from '$lib/competition';
+	import { activeCompetition, refreshActiveCompetition } from '$lib/stores/activeCompetition';
 
 	type Side = 'Yes' | 'No';
 	type Tab = 'Buy' | 'Sell';
@@ -48,6 +58,13 @@
 
 	let session: any = {};
 	sessionKey.subscribe((s) => (session = s));
+
+	let comp: any = { pubkey: null, view: null, loaded: false };
+	activeCompetition.subscribe((s) => (comp = s));
+
+	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
+	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
+	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
 
 	let events: PolyEvent[] = [];
 	let statsEvents: PolyEvent[] = [];
@@ -180,6 +197,7 @@
 	async function refreshAccount() {
 		if (!wallet?.connected) {
 			balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
+			clearUserBalance();
 			accountInitialized = false;
 			userPositions = [];
 			return;
@@ -189,9 +207,11 @@
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
 				balance = await hashfoxClient.getBalanceBreakdown();
+				setUserBalance(balance);
 				await loadUserPositions();
 			} else {
 				balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
+				clearUserBalance();
 				userPositions = [];
 			}
 		} catch (err) {
@@ -283,30 +303,65 @@
 			return;
 		}
 
+		if (tradeTab === 'Buy' && tournamentPending) {
+			statusMessage = 'Tournament not started — waiting for the field to fill.';
+			return;
+		}
+		if (tradeTab === 'Buy' && tournamentSettled) {
+			statusMessage = 'Tournament settled — claim exit on /competition.';
+			return;
+		}
+
 		busy = true;
 		statusMessage = 'Submitting…';
 		try {
 			const conn = buildConnection();
-			const program = buildProgram(conn, wallet.adapter);
-			const acc = await getUserAccount(program, wallet.publicKey);
+			const walletProgram = buildProgram(conn, wallet.adapter);
+			const acc = await getUserAccount(walletProgram, wallet.publicKey);
 			if (!acc) {
 				statusMessage = 'Initializing paper account…';
-				await initializeUserAccount(program, wallet.publicKey, new BN(10_000_000));
+				await initializeUserAccount(walletProgram, wallet.publicKey, new BN(10_000_000));
 			}
-			const sessionToken: PublicKey | null = session.active ? session.token : null;
+
+			const sessionActive =
+				session.active &&
+				sessionKeyManager.isSessionActive() &&
+				sessionKeyManager.isSessionForWallet(wallet.publicKey);
+			const sessionKp = sessionActive ? sessionKeyManager.getSessionKeypair() : null;
+			const sessionTokenPda = sessionActive ? sessionKeyManager.getSessionTokenPDA() : null;
+			const program = sessionKp ? buildKeypairProgram(conn, sessionKp) : walletProgram;
+			const signer: PublicKey = sessionKp ? sessionKp.publicKey : wallet.publicKey;
+			const sessionToken: PublicKey | null = sessionTokenPda;
 
 			let sig = '';
 			if (tradeTab === 'Buy') {
 				const marketId = (selectedMarket.id || selectedEvent?.slug || '').slice(0, 128);
-				const fn = selectedSide === 'Yes' ? buyYes : buyNo;
-				sig = await fn(program, wallet.publicKey, {
-					marketId,
-					amountUsd: usd(amount),
-					pricePerShare: priceScaled(priceDec),
-					stopLoss: stopLoss > 0 ? priceScaled(stopLoss / 100) : new BN(0),
-					takeProfit: takeProfit > 0 ? priceScaled(takeProfit / 100) : new BN(0),
-					sessionToken
-				});
+				if (inTournament && comp.pubkey) {
+					const fn = selectedSide === 'Yes' ? compBuyYes : compBuyNo;
+					sig = await fn(program, wallet.publicKey, comp.pubkey, {
+						marketId,
+						amountUsd: usd(amount),
+						pricePerShare: priceScaled(priceDec),
+						stopLoss: stopLoss > 0 ? priceScaled(stopLoss / 100) : new BN(0),
+						takeProfit: takeProfit > 0 ? priceScaled(takeProfit / 100) : new BN(0),
+						sessionToken,
+						signer
+					});
+				} else {
+					const fn = selectedSide === 'Yes' ? buyYes : buyNo;
+					sig = await fn(program, wallet.publicKey, {
+						marketId,
+						amountUsd: usd(amount),
+						pricePerShare: priceScaled(priceDec),
+						stopLoss: stopLoss > 0 ? priceScaled(stopLoss / 100) : new BN(0),
+						takeProfit: takeProfit > 0 ? priceScaled(takeProfit / 100) : new BN(0),
+						sessionToken,
+						signer
+					});
+				}
+				if (selectedMarket.question) {
+					rememberPredictionMarketName(marketId, selectedMarket.question);
+				}
 			} else {
 				if (!selectedPosition) throw new Error('No position selected');
 				const fn = selectedSide === 'Yes' ? sellYes : sellNo;
@@ -316,7 +371,8 @@
 					new BN(selectedPosition.positionId),
 					usd(amount),
 					priceScaled(priceDec),
-					sessionToken
+					sessionToken,
+					signer
 				);
 			}
 
@@ -345,6 +401,11 @@
 		}
 		try {
 			const batch = await polymarketClient.fetchEvents(PAGE_SIZE, eventsOffset);
+			for (const ev of batch) {
+				for (const m of ev.markets ?? []) {
+					if (m.id && m.question) rememberPredictionMarketName(m.id, m.question);
+				}
+			}
 			if (append) {
 				const seen = new Set(events.map((e) => e.id));
 				events = [...events, ...batch.filter((e) => !seen.has(e.id))];
@@ -422,6 +483,25 @@
 </script>
 
 <div class="pred-pro">
+	{#if comp.view}
+		<div class="comp-banner {comp.view.status}">
+			<div class="cb-left">
+				<span class="cb-dot"></span>
+				<span class="cb-tag">TOURNAMENT MODE</span>
+				<span class="cb-name">{comp.view.name}</span>
+			</div>
+			<div class="cb-right">
+				{#if comp.view.status === 'active'}
+					<span class="cb-meta">Ends in {fmtCountdown(comp.view.endTs)}</span>
+				{:else if comp.view.status === 'pending'}
+					<span class="cb-meta">Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants})</span>
+				{:else}
+					<span class="cb-meta">Settled — claim exit on /competition</span>
+				{/if}
+				<a class="cb-link" href="/competition?cup={comp.pubkey?.toBase58()}">Open hub →</a>
+			</div>
+		</div>
+	{/if}
 	{#if !selectedEvent}
 		<!-- EVENTS LIST VIEW -->
 		<div class="list-wrap">
@@ -989,7 +1069,7 @@
 		color: inherit;
 		font-family: inherit;
 	}
-	.ec-head:hover { background: rgba(255, 149, 0, 0.04); }
+	.ec-head:hover { background: rgba(255, 90, 0, 0.04); }
 	.ec-img {
 		width: 34px;
 		height: 34px;
@@ -1051,7 +1131,7 @@
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}
-	.ec-q:hover .ec-q-text { color: #ff9500; }
+	.ec-q:hover .ec-q-text { color: #ff5a00; }
 	.ec-chance {
 		display: flex;
 		flex-direction: column;
@@ -1105,7 +1185,7 @@
 		margin-left: auto;
 		background: transparent;
 		border: 1px solid #222;
-		color: #ff9500;
+		color: #ff5a00;
 		padding: 4px 10px;
 		font-family: inherit;
 		font-size: 10px;
@@ -1114,7 +1194,7 @@
 		border-radius: 4px;
 		cursor: pointer;
 	}
-	.ec-open:hover { border-color: #ff9500; background: rgba(255, 149, 0, 0.06); }
+	.ec-open:hover { border-color: #ff5a00; background: rgba(255, 90, 0, 0.06); }
 
 	.list-loading.more { padding: 20px 0; }
 	.list-end {
@@ -1151,7 +1231,7 @@
 		width: 18px;
 		height: 18px;
 		border: 2px solid #222;
-		border-top-color: #ff9500;
+		border-top-color: #ff5a00;
 		border-radius: 50%;
 		animation: pl-spin 0.8s linear infinite;
 	}
@@ -1179,7 +1259,7 @@
 		transition: background 0.12s;
 	}
 	.el-row:hover:not(.el-head) {
-		background: rgba(255, 149, 0, 0.04);
+		background: rgba(255, 90, 0, 0.04);
 	}
 	.el-head {
 		background: #0a0a0a;
@@ -1240,7 +1320,7 @@
 	.el-yes { color: #00ff64; }
 	.el-date { color: #888; }
 	.el-chev { color: #555; text-align: right; }
-	.el-row:hover .el-chev { color: #ff9500; }
+	.el-row:hover .el-chev { color: #ff5a00; }
 
 	/* balance pills shared */
 	.bs-cell {
@@ -1260,7 +1340,7 @@
 		font-weight: 900;
 	}
 	.bs-value { color: #e8e8e8; font-size: 13px; font-weight: 900; }
-	.bs-usdt { color: #ff9500; }
+	.bs-usdt { color: #ff5a00; }
 	.bs-avail { color: #00ff64; }
 	.bs-lock.is-lock { color: #ffb84d; }
 
@@ -1286,7 +1366,7 @@
 		font-weight: 900;
 		font-family: inherit;
 	}
-	.ev-back:hover { border-color: #ff9500; color: #ff9500; }
+	.ev-back:hover { border-color: #ff5a00; color: #ff5a00; }
 	.ev-logo {
 		width: 26px;
 		height: 26px;
@@ -1361,7 +1441,7 @@
 
 	.ev-sidebar-label {
 		padding: 10px 14px;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 11px;
 		letter-spacing: 0.14em;
 		font-weight: 900;
@@ -1386,8 +1466,8 @@
 	}
 	.ev-mrow:hover { background: #111; }
 	.ev-mrow.active {
-		background: rgba(255, 149, 0, 0.08);
-		border-left: 2px solid #ff9500;
+		background: rgba(255, 90, 0, 0.08);
+		border-left: 2px solid #ff5a00;
 	}
 	.ev-mrow-bar {
 		width: 14px;
@@ -1517,8 +1597,8 @@
 	}
 	.ev-ctab:hover { color: #ccc; }
 	.ev-ctab.active {
-		color: #ff9500;
-		border-bottom-color: #ff9500;
+		color: #ff5a00;
+		border-bottom-color: #ff5a00;
 	}
 
 	.ev-center-content {
@@ -1602,8 +1682,8 @@
 		border-bottom: 2px solid transparent;
 	}
 	.tt-btn.tt-active {
-		color: #ff9500;
-		border-bottom-color: #ff9500;
+		color: #ff5a00;
+		border-bottom-color: #ff5a00;
 	}
 
 	.amount-block { display: flex; flex-direction: column; gap: 6px; }
@@ -1657,7 +1737,7 @@
 		cursor: pointer;
 		border-radius: 4px;
 	}
-	.q-btn:hover { border-color: #ff9500; color: #ff9500; }
+	.q-btn:hover { border-color: #ff5a00; color: #ff5a00; }
 
 	.sltp-wrap {
 		border: 1px solid #1a1a1a;
@@ -1745,8 +1825,8 @@
 		transition: border-color 0.15s, box-shadow 0.15s;
 	}
 	.sltp-input-wrap:focus-within {
-		border-color: #ff9500;
-		box-shadow: 0 0 0 1px rgba(255, 149, 0, 0.18);
+		border-color: #ff5a00;
+		box-shadow: 0 0 0 1px rgba(255, 90, 0, 0.18);
 	}
 	.sltp-input {
 		flex: 1;
@@ -1789,8 +1869,8 @@
 		border-radius: 6px;
 	}
 	.pos-row.active {
-		border-color: #ff9500;
-		background: rgba(255, 149, 0, 0.05);
+		border-color: #ff5a00;
+		background: rgba(255, 90, 0, 0.05);
 	}
 	.pr-side { font-weight: 900; letter-spacing: 0.08em; font-size: 10px; }
 	.pr-yes { color: #00ff64; }
@@ -1823,7 +1903,7 @@
 		color: #aaa;
 	}
 	.sum-row.hl { color: #fff; font-weight: 900; margin-top: 4px; }
-	.orange { color: #ff9500; }
+	.orange { color: #ff5a00; }
 
 	.action {
 		padding: 13px 14px;
@@ -1861,10 +1941,10 @@
 
 	.status-msg {
 		font-size: 10px;
-		color: #ff9500;
+		color: #ff5a00;
 		text-align: center;
 		padding: 4px 8px;
-		background: rgba(255, 149, 0, 0.08);
+		background: rgba(255, 90, 0, 0.08);
 		border-radius: 4px;
 	}
 
@@ -1906,7 +1986,7 @@
 		cursor: pointer;
 		border-radius: 4px;
 	}
-	.bs-refresh:hover { border-color: #ff9500; color: #ff9500; }
+	.bs-refresh:hover { border-color: #ff5a00; color: #ff5a00; }
 	.bs-hint {
 		margin-top: 8px;
 		font-size: 10px;
@@ -1941,4 +2021,27 @@
 		.events-grid { grid-template-columns: 1fr; }
 		.bs-row { grid-template-columns: repeat(2, 1fr); }
 	}
+
+	.comp-banner {
+		display: flex; justify-content: space-between; align-items: center;
+		gap: 12px; flex-wrap: wrap;
+		padding: 10px 14px;
+		margin: 10px;
+		border-radius: 8px;
+		background: linear-gradient(180deg, rgba(0, 255, 102, 0.06), rgba(255, 255, 255, 0.01));
+		border: 1px solid rgba(0, 255, 102, 0.4);
+	}
+	.comp-banner.pending { background: linear-gradient(180deg, rgba(255, 90, 0, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 90, 0, 0.4); }
+	.comp-banner.settled { background: linear-gradient(180deg, rgba(255, 102, 204, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 102, 204, 0.4); }
+	.cb-left, .cb-right { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+	.cb-dot { width: 7px; height: 7px; border-radius: 50%; background: #00ff66; box-shadow: 0 0 8px rgba(0, 255, 102, 0.7); }
+	.comp-banner.pending .cb-dot { background: #ff5a00; box-shadow: 0 0 8px rgba(255, 90, 0, 0.7); }
+	.comp-banner.settled .cb-dot { background: #ff66cc; box-shadow: 0 0 8px rgba(255, 102, 204, 0.7); }
+	.cb-tag { color: #00ff66; font-family: 'Courier New', monospace; font-size: 9px; font-weight: 900; letter-spacing: 0.18em; }
+	.comp-banner.pending .cb-tag { color: #ff5a00; }
+	.comp-banner.settled .cb-tag { color: #ff66cc; }
+	.cb-name { color: #fff; font-family: 'Courier New', monospace; font-size: 12px; font-weight: 800; }
+	.cb-meta { color: #aaa; font-family: 'Courier New', monospace; font-size: 10px; }
+	.cb-link { color: #ff5a00; text-decoration: none; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 900; }
+	.cb-link:hover { color: #ffb733; }
 </style>

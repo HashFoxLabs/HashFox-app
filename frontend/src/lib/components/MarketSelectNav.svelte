@@ -167,12 +167,13 @@
 		padding: 5px 10px;
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		transition: border-color 0.15s ease;
 		min-width: 200px;
 	}
 
 	.market-search-input-wrap.open {
-		border-color: #ff9500;
+		border-color: #ff5a00;
 	}
 
 	.market-search-icon {
@@ -216,12 +217,12 @@
 		max-height: 340px;
 		overflow-y: auto;
 		scrollbar-width: thin;
-		scrollbar-color: #ff9500 #111;
+		scrollbar-color: #ff5a00 #111;
 	}
 
 	:global(.market-search-dropdown::-webkit-scrollbar) { width: 5px; }
 	:global(.market-search-dropdown::-webkit-scrollbar-track) { background: #111; }
-	:global(.market-search-dropdown::-webkit-scrollbar-thumb) { background: #ff9500; }
+	:global(.market-search-dropdown::-webkit-scrollbar-thumb) { background: #ff5a00; }
 
 	:global(.cat-tabs) {
 		display: flex;
@@ -246,7 +247,7 @@
 		letter-spacing: 0.08em;
 	}
 	:global(.cat-tab:hover) { color: #ccc; }
-	:global(.cat-tab.active) { color: #ff9500; border-color: #ff9500; }
+	:global(.cat-tab.active) { color: #ff5a00; border-color: #ff5a00; }
 
 	:global(.empty) {
 		padding: 16px;
@@ -275,13 +276,13 @@
 
 	:global(.market-search-option:hover),
 	:global(.market-search-option.highlighted) {
-		background: rgba(255, 149, 0, 0.1);
+		background: rgba(255, 90, 0, 0.1);
 		color: #fff;
 	}
 
 	:global(.market-search-option.active) {
-		color: #ff9500;
-		background: rgba(255, 149, 0, 0.06);
+		color: #ff5a00;
+		background: rgba(255, 90, 0, 0.06);
 	}
 
 	:global(.opt-cat) {
@@ -294,7 +295,7 @@
 		font-size: 9px;
 		font-weight: bold;
 	}
-	:global(.opt-cat-crypto) { background: rgba(255, 149, 0, 0.2); color: #ff9500; }
+	:global(.opt-cat-crypto) { background: rgba(255, 90, 0, 0.2); color: #ff5a00; }
 	:global(.opt-cat-traditional) { background: rgba(0, 200, 255, 0.15); color: #00c8ff; }
 	:global(.opt-cat-prediction) { background: rgba(0, 255, 100, 0.15); color: #00ff64; }
 

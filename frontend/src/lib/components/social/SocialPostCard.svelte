@@ -19,6 +19,22 @@
 	export let followingIds: Set<string> = new Set();
 	export let onToggleFollow: (userId: string) => Promise<void> | void = () => {};
 	export let readonly: boolean = false;
+	/** Optional handler to remove the post from the public feed.
+	 * When provided, an UNPOST button is rendered in the footer. */
+	export let onUnpost: ((trade: SharedTrade) => Promise<void> | void) | null = null;
+
+	let unposting = false;
+	async function handleUnpost(e: MouseEvent) {
+		e.stopPropagation();
+		if (!onUnpost || unposting) return;
+		if (!confirm('Remove this trade from the community feed?')) return;
+		unposting = true;
+		try {
+			await onUnpost(trade);
+		} finally {
+			unposting = false;
+		}
+	}
 
 	let showDetail = false;
 	let commentText = '';
@@ -56,6 +72,16 @@
 		if (!p && p !== 0) return '—';
 		if (Math.abs(p) < 10) return `$${p.toFixed(3)}`;
 		return `$${p.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+	}
+
+	/** Render a percent that is non-zero but rounds to 0.00 with extra
+	 *  precision, so a tiny realised loss never shows as "0.00%". */
+	function formatPct(p: number): string {
+		if (!Number.isFinite(p) || p === 0) return '0.00';
+		const abs = Math.abs(p);
+		if (abs >= 0.01) return p.toFixed(2);
+		if (abs >= 0.0001) return p.toFixed(4);
+		return p.toExponential(1);
 	}
 
 	function showLikeMessage(msg: string) {
@@ -251,16 +277,22 @@
 					<span class="chip dir" class:up={isLongish} class:down={!isLongish}>{trade.direction.toUpperCase()}</span>
 				{/if}
 				<span class="chip market">{MARKET_TYPE_LABELS[trade.marketType]}</span>
-				{#if trade.platform}
-					<span class="chip plat">{trade.platform.toUpperCase()}</span>
+				{#if isPaper && trade.tradeMode && trade.tradeMode !== 'prediction'}
+					<span class="chip mode">{trade.tradeMode.toUpperCase()}</span>
 				{/if}
-				{#if trade.status}
-					<span class="chip status" class:closed={trade.status === 'closed'}>{trade.status.toUpperCase()}</span>
+				{#if isPaper && trade.tradeMode === 'perp' && trade.leverage && trade.leverage > 1}
+					<span class="chip lev">{trade.leverage}×</span>
+				{/if}
+				{#if isPaper && trade.orderType === 'limit'}
+					<span class="chip ord">LIMIT</span>
+				{/if}
+				{#if trade.platform && trade.platform.toLowerCase() !== 'blockberg'}
+					<span class="chip plat">{trade.platform.toUpperCase()}</span>
 				{/if}
 			</div>
 			<div class="pnl">
 				<span class="pnl-pct" class:up={isPositive} class:down={!isPositive}>
-					{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+					{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%
 				</span>
 				{#if isPaper}
 					<span class="pnl-abs" class:up={isPositive} class:down={!isPositive}>
@@ -282,7 +314,7 @@
 					<div class="chart-head">
 						<span>EQUITY CURVE</span>
 						<span class="chart-pct" class:up={isPositive} class:down={!isPositive}>
-							{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+							{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%
 						</span>
 					</div>
 					<SocialEquityChart rawData={trade.equityCurveRaw} positive={isPositive} height={140} />
@@ -325,6 +357,14 @@
 					</svg>
 					<span>{commentCount}</span>
 				</span>
+				{#if onUnpost}
+					<button class="action-btn unpost" disabled={unposting} on:click={handleUnpost}>
+						<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2m-6 4v6m4-6v6M5 7l1 13a2 2 0 002 2h8a2 2 0 002-2l1-13" />
+						</svg>
+						<span>{unposting ? 'REMOVING…' : 'UNPOST'}</span>
+					</button>
+				{/if}
 			{:else}
 				<button class="action-btn" on:click={(e) => { e.stopPropagation(); openDetail(); }}>
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -379,7 +419,7 @@
 						{trade.asset}
 					</p>
 					<span class="pill" class:up={isPositive} class:down={!isPositive}>
-						{isPaper ? trade.direction.toUpperCase() : `${isPositive ? '+' : ''}${trade.pnlPercent.toFixed(2)}%`}
+						{isPaper ? trade.direction.toUpperCase() : `${isPositive ? '+' : ''}${formatPct(trade.pnlPercent)}%`}
 					</span>
 				</div>
 
@@ -404,7 +444,7 @@
 							<span>P&amp;L</span>
 							<p class:up={isPositive} class:down={!isPositive}>
 								{isPositive ? '+' : ''}${Math.abs(trade.pnl).toFixed(2)}
-								<small>({isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%)</small>
+								<small>({isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%)</small>
 							</p>
 						</div>
 					</div>
@@ -424,7 +464,7 @@
 							<div class="chart-head">
 								<span>EQUITY CURVE</span>
 								<span class="chart-pct" class:up={isPositive} class:down={!isPositive}>
-									{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
+									{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%
 								</span>
 							</div>
 							<SocialEquityChart rawData={trade.equityCurveRaw} positive={isPositive} />
@@ -438,7 +478,7 @@
 					<div class="stat-row">
 						<div class="stat"><span>Start</span><strong>${(trade.initialCapital ?? trade.startBalance ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
 						<div class="stat"><span>Final</span><strong class:up={isPositive} class:down={!isPositive}>${(trade.finalCapital ?? trade.endBalance ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div>
-						<div class="stat"><span>Return</span><strong class:up={isPositive} class:down={!isPositive}>{isPositive ? '+' : ''}{trade.pnlPercent.toFixed(2)}%</strong></div>
+						<div class="stat"><span>Return</span><strong class:up={isPositive} class:down={!isPositive}>{isPositive ? '+' : ''}{formatPct(trade.pnlPercent)}%</strong></div>
 						<div class="stat"><span>Net P&amp;L</span><strong class:up={isPositive} class:down={!isPositive}>{isPositive ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}</strong></div>
 					</div>
 					<div class="stat-row">
@@ -568,8 +608,8 @@
 		width: 100%;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	}
-	.post-row:hover { border-color: rgba(255,149,0,0.55); background: rgba(255,255,255,0.02); }
-	.post-row:focus-visible { outline: 2px solid #ff9500; outline-offset: 2px; }
+	.post-row:hover { border-color: rgba(255, 90, 0,0.55); background: rgba(255,255,255,0.02); }
+	.post-row:focus-visible { outline: 2px solid #ff5a00; outline-offset: 2px; }
 	.post-row.readonly { cursor: default; }
 	.post-row.readonly:hover { border-color: #222; background: #0a0a0a; }
 
@@ -586,7 +626,7 @@
 		width: 44px; height: 44px; border-radius: 50%;
 		display: flex; align-items: center; justify-content: center;
 		object-fit: cover; border: 1px solid #2a2a2a;
-		background: rgba(255,149,0,0.15); color: #ff9500;
+		background: rgba(255, 90, 0,0.15); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 14px;
 	}
 
@@ -615,7 +655,10 @@
 	.chip.type.strategy { color: #ff66cc; border-color: rgba(255,102,204,0.32); background: rgba(255,102,204,0.08); }
 	.chip.dir.up { color: #00ff66; border-color: rgba(0,255,102,0.3); background: rgba(0,255,102,0.08); }
 	.chip.dir.down { color: #ff6b6b; border-color: rgba(255,107,107,0.3); background: rgba(255,107,107,0.08); }
-	.chip.market { color: #ff9500; border-color: rgba(255,149,0,0.3); background: rgba(255,149,0,0.06); }
+	.chip.market { color: #ff5a00; border-color: rgba(255, 90, 0,0.3); background: rgba(255, 90, 0,0.06); }
+	.chip.mode { color: #d8c46d; border-color: rgba(216,196,109,0.3); background: rgba(216,196,109,0.07); }
+	.chip.lev { color: #ff5a00; border-color: rgba(255, 90, 0,0.45); background: rgba(255, 90, 0,0.12); }
+	.chip.ord { color: #c0a0ff; border-color: rgba(192,160,255,0.3); background: rgba(192,160,255,0.07); }
 	.chip.plat { color: #aaa; }
 	.chip.status { color: #00ff66; border-color: rgba(0,255,102,0.3); background: rgba(0,255,102,0.08); }
 	.chip.status.closed { color: #888; border-color: #333; background: rgba(255,255,255,0.04); }
@@ -624,12 +667,12 @@
 		font-family: 'Courier New', monospace;
 		font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
 		padding: 2px 9px; border-radius: 999px;
-		border: 1px solid rgba(255,149,0,0.45);
-		background: rgba(255,149,0,0.08);
-		color: #ff9500; cursor: pointer;
+		border: 1px solid rgba(255, 90, 0,0.45);
+		background: rgba(255, 90, 0,0.08);
+		color: #ff5a00; cursor: pointer;
 		transition: all 0.15s;
 	}
-	.follow-btn:hover { background: rgba(255,149,0,0.18); }
+	.follow-btn:hover { background: rgba(255, 90, 0,0.18); }
 	.follow-btn.following {
 		border-color: #2a2a2a;
 		background: rgba(255,255,255,0.03);
@@ -687,13 +730,21 @@
 		font-family: 'Courier New', monospace; font-size: 12px; font-weight: 700;
 		cursor: pointer; transition: all 0.15s;
 	}
-	.action-btn:hover { color: #ff9500; background: rgba(255,149,0,0.08); }
-	.action-btn.liked { color: #ff9500; background: rgba(255,149,0,0.1); }
+	.action-btn:hover { color: #ff5a00; background: rgba(255, 90, 0,0.08); }
+	.action-btn.liked { color: #ff5a00; background: rgba(255, 90, 0,0.1); }
 	.action-btn.ghost { margin-left: auto; color: #777; font-size: 11px; letter-spacing: 0.04em; }
-	.action-btn.ghost:hover { color: #ff9500; background: transparent; }
+	.action-btn.ghost:hover { color: #ff5a00; background: transparent; }
+	.action-btn.unpost {
+		margin-left: auto;
+		color: #ff6b6b;
+		border: 1px solid rgba(255, 107, 107, 0.3);
+		background: rgba(255, 107, 107, 0.05);
+	}
+	.action-btn.unpost:hover { color: #fff; background: #ff4444; border-color: #ff4444; }
+	.action-btn.unpost:disabled { opacity: 0.55; cursor: not-allowed; }
 	.market-tag {
 		font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
-		color: #ff9500; font-family: 'Courier New', monospace;
+		color: #ff5a00; font-family: 'Courier New', monospace;
 	}
 
 	.like-wrap { position: relative; }
@@ -733,7 +784,7 @@
 		width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
 		border: 1px solid #2a2a2a;
 		display: flex; align-items: center; justify-content: center;
-		background: rgba(255,149,0,0.15); color: #ff9500;
+		background: rgba(255, 90, 0,0.15); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 12px;
 	}
 	.head-text { display: flex; flex-direction: column; gap: 1px; }
@@ -818,7 +869,7 @@
 
 	.section-title { display: flex; gap: 8px; align-items: center; margin: 14px 0 10px; }
 	.bar { width: 4px; height: 14px; border-radius: 2px; }
-	.bar.orange { background: #ff9500; }
+	.bar.orange { background: #ff5a00; }
 	.bar.purple { background: #ff66cc; }
 	.section-title span {
 		font-family: 'Courier New', monospace;
@@ -853,7 +904,7 @@
 		font-family: 'Courier New', monospace; font-size: 11px;
 	}
 	.config-item span { color: #777; }
-	.config-item strong { color: #ff9500; font-weight: 800; }
+	.config-item strong { color: #ff5a00; font-weight: 800; }
 	.config-item strong.up { color: #00ff66; }
 	.config-item strong.down { color: #ff6b6b; }
 
@@ -882,11 +933,11 @@
 	}
 	.c-avatar.fallback {
 		display: flex; align-items: center; justify-content: center;
-		background: rgba(255,149,0,0.15); color: #ff9500;
+		background: rgba(255, 90, 0,0.15); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 10px;
 	}
 	.c-body { flex: 1; min-width: 0; }
-	.c-user { color: #ff9500; font-size: 11px; font-weight: 700; }
+	.c-user { color: #ff5a00; font-size: 11px; font-weight: 700; }
 	.c-text { color: #fff; font-size: 13px; margin: 2px 0 0; }
 	.c-edit { display: flex; gap: 6px; margin-top: 4px; }
 	.c-edit input {
@@ -894,7 +945,7 @@
 		padding: 6px 10px; border-radius: 8px; color: #fff;
 		font-size: 12px;
 	}
-	.c-edit input:focus { outline: none; border-color: rgba(255,149,0,0.5); }
+	.c-edit input:focus { outline: none; border-color: rgba(255, 90, 0,0.5); }
 	.c-save, .c-cancel {
 		background: transparent; border: none; cursor: pointer;
 		font-size: 11px; font-weight: 700; padding: 0 6px;
@@ -908,7 +959,7 @@
 		display: flex; align-items: center; justify-content: center;
 		border-radius: 4px;
 	}
-	.c-actions button:hover { color: #ff9500; background: rgba(255,255,255,0.04); }
+	.c-actions button:hover { color: #ff5a00; background: rgba(255,255,255,0.04); }
 	.c-actions button.del:hover { color: #ff6b6b; }
 
 	.comment-input-row { display: flex; gap: 6px; }
@@ -918,14 +969,14 @@
 		font-size: 13px;
 	}
 	.comment-input-row input::placeholder { color: #666; }
-	.comment-input-row input:focus { outline: none; border-color: rgba(255,149,0,0.5); }
+	.comment-input-row input:focus { outline: none; border-color: rgba(255, 90, 0,0.5); }
 	.comment-input-row button {
-		background: rgba(255,149,0,0.12); color: #ff9500; border: 1px solid rgba(255,149,0,0.4);
+		background: rgba(255, 90, 0,0.12); color: #ff5a00; border: 1px solid rgba(255, 90, 0,0.4);
 		padding: 9px 16px; border-radius: 10px; font-weight: 700; font-size: 12px;
 		font-family: 'Courier New', monospace; letter-spacing: 0.06em;
 		cursor: pointer; transition: all 0.15s;
 	}
-	.comment-input-row button:hover:not(:disabled) { background: rgba(255,149,0,0.2); }
+	.comment-input-row button:hover:not(:disabled) { background: rgba(255, 90, 0,0.2); }
 	.comment-input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 	@media (max-width: 720px) {

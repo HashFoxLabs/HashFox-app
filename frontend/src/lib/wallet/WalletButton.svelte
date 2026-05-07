@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { walletStore, walletManager } from './stores';
+	import { walletStore, walletManager, registerBrowserWalletAdapters } from './stores';
 	import { WEB3AUTH_CLIENT_ID } from '$lib/env';
-	import { initWeb3Auth } from './web3auth';
 	import WalletModal from './WalletModal.svelte';
 	import ProfileChip from '../profile/ProfileChip.svelte';
 
@@ -14,13 +13,15 @@
 		walletState = state;
 	});
 
-	onMount(() => {
+	onMount(async () => {
+		await registerBrowserWalletAdapters();
 		wallets = walletManager.getWallets();
 		// Prevent "reconnect" loops on route changes (TopChrome remounts).
 		if (!walletState.connected) {
-			walletManager.autoConnect();
+			void walletManager.autoConnect();
 		}
 		if (WEB3AUTH_CLIENT_ID) {
+			const { initWeb3Auth } = await import('./web3auth');
 			void initWeb3Auth();
 		}
 	});
@@ -115,7 +116,7 @@
 
 <style>
 	.connect-button {
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		border: none;
 		padding: 8px 18px;
@@ -124,7 +125,7 @@
 		font-weight: bold;
 		letter-spacing: 0.18em;
 		cursor: pointer;
-		border-radius: 3px;
+		border-radius: 6px;
 		transition: all 0.15s ease;
 		display: flex;
 		align-items: center;
@@ -135,7 +136,7 @@
 	.connect-button:hover:not(:disabled) {
 		background: #ffb733;
 		transform: translateY(-1px);
-		box-shadow: 0 0 12px rgba(255, 149, 0, 0.3);
+		box-shadow: 0 0 12px rgba(255, 90, 0, 0.3);
 	}
 	.connect-button:disabled {
 		opacity: 0.7;
@@ -153,7 +154,7 @@
 		gap: 10px;
 		background: #0a0a0a;
 		border: 1px solid #222;
-		border-radius: 3px;
+		border-radius: 6px;
 		padding: 5px 10px 5px 6px;
 	}
 	.wallet-info {
@@ -163,7 +164,7 @@
 		max-width: 140px;
 	}
 	.wallet-address {
-		color: #ff9500;
+		color: #ff5a00;
 		font-family: 'Courier New', monospace;
 		font-size: 12px;
 		font-weight: bold;
@@ -188,7 +189,7 @@
 		font-family: 'Courier New', monospace;
 		font-size: 11px;
 		cursor: pointer;
-		border-radius: 3px;
+		border-radius: 6px;
 		transition: all 0.15s ease;
 	}
 	.disconnect-button:hover {

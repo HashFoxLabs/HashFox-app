@@ -199,7 +199,7 @@
 		border-radius: 4px;
 		width: 100%;
 		max-width: 440px;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 149, 0, 0.06) inset;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 90, 0, 0.06) inset;
 		font-family: 'Courier New', monospace;
 		display: flex;
 		flex-direction: column;
@@ -227,12 +227,12 @@
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: #ff9500;
-		box-shadow: 0 0 10px rgba(255, 149, 0, 0.7);
+		background: #ff5a00;
+		box-shadow: 0 0 10px rgba(255, 90, 0, 0.7);
 	}
 	.cu-title {
 		margin: 0;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 12px;
 		font-weight: bold;
 		letter-spacing: 0.25em;
@@ -242,7 +242,7 @@
 		font-weight: bold;
 		letter-spacing: 0.18em;
 		color: #000;
-		background: #ff9500;
+		background: #ff5a00;
 		padding: 3px 8px;
 		border-radius: 3px;
 	}
@@ -278,7 +278,7 @@
 		padding: 8px 12px;
 		transition: border-color 0.12s ease;
 	}
-	.cu-input-row:focus-within { border-color: #ff9500; }
+	.cu-input-row:focus-within { border-color: #ff5a00; }
 	.cu-input-row.err { border-color: #ff6b6b; }
 	.cu-input-row.ok { border-color: #00ff66; }
 
@@ -293,7 +293,7 @@
 		background: transparent;
 		border: none;
 		outline: none;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 15px;
 		font-weight: bold;
 		font-family: inherit;
@@ -341,14 +341,14 @@
 		transition: all 0.15s ease;
 	}
 	.cu-btn-primary {
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
-		border-color: #ff9500;
+		border-color: #ff5a00;
 	}
 	.cu-btn-primary:hover:not(:disabled) {
 		background: #ffb733;
 		border-color: #ffb733;
-		box-shadow: 0 0 12px rgba(255, 149, 0, 0.4);
+		box-shadow: 0 0 12px rgba(255, 90, 0, 0.4);
 	}
 	.cu-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 

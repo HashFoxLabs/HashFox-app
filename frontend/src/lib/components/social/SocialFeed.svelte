@@ -427,7 +427,7 @@
 		font-family: inherit;
 	}
 	.search-wrap input::placeholder { color: #666; }
-	.search-wrap input:focus { outline: none; border-color: rgba(255,149,0,0.5); }
+	.search-wrap input:focus { outline: none; border-color: rgba(255, 90, 0,0.5); }
 	.search-ic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #666; }
 	.clear-btn {
 		position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
@@ -445,7 +445,7 @@
 		letter-spacing: 0.04em; cursor: pointer; transition: all 0.15s;
 	}
 	.dd-btn:hover { border-color: #444; color: #fff; }
-	.dd-btn.on { background: rgba(255,149,0,0.1); border-color: rgba(255,149,0,0.4); color: #ff9500; }
+	.dd-btn.on { background: rgba(255, 90, 0,0.1); border-color: rgba(255, 90, 0,0.4); color: #ff5a00; }
 	.dd-btn.disabled { opacity: 0.4; cursor: not-allowed; }
 	.dd-menu {
 		position: absolute; top: calc(100% + 6px); right: 0;
@@ -464,7 +464,7 @@
 		border-radius: 6px; cursor: pointer;
 	}
 	.dd-menu button:hover { background: rgba(255,255,255,0.04); color: #fff; }
-	.dd-menu button.active { background: rgba(255,149,0,0.1); color: #ff9500; }
+	.dd-menu button.active { background: rgba(255, 90, 0,0.1); color: #ff5a00; }
 
 	.profile-toggle {
 		background: rgba(255,255,255,0.04); border: 1px solid #2a2a2a;
@@ -473,7 +473,7 @@
 		letter-spacing: 0.04em; cursor: pointer; transition: all 0.15s;
 	}
 	.profile-toggle:hover { border-color: #444; color: #fff; }
-	.profile-toggle.on { background: rgba(255,149,0,0.1); border-color: rgba(255,149,0,0.4); color: #ff9500; }
+	.profile-toggle.on { background: rgba(255, 90, 0,0.1); border-color: rgba(255, 90, 0,0.4); color: #ff5a00; }
 	.profile-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
 	.profile-toggle:disabled:hover { border-color: #2a2a2a; color: #ccc; }
 
@@ -498,12 +498,12 @@
 	}
 
 	.divider { display: flex; align-items: center; gap: 16px; margin: 28px 0 16px; }
-	.line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,149,0,0.4), transparent); }
+	.line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(255, 90, 0,0.4), transparent); }
 	.line.purple { background: linear-gradient(90deg, transparent, rgba(255,102,204,0.4), transparent); }
 	.div-tag {
 		font-family: 'Courier New', monospace;
-		padding: 5px 14px; border: 1px solid rgba(255,149,0,0.35); border-radius: 999px;
-		background: rgba(255,149,0,0.08); color: #ff9500;
+		padding: 5px 14px; border: 1px solid rgba(255, 90, 0,0.35); border-radius: 999px;
+		background: rgba(255, 90, 0,0.08); color: #ff5a00;
 		font-size: 10px; font-weight: 800; letter-spacing: 0.18em;
 	}
 	.div-tag.purple {
@@ -521,28 +521,28 @@
 		overflow: hidden; cursor: pointer; transition: all 0.2s;
 		font-family: inherit; padding: 0;
 	}
-	.profile-card:hover { border-color: rgba(255,149,0,0.5); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.4); }
+	.profile-card:hover { border-color: rgba(255, 90, 0,0.5); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.4); }
 	.banner { width: 100%; height: 70px; overflow: hidden; }
 	.banner img { width: 100%; height: 100%; object-fit: cover; }
 	.banner-fallback {
 		width: 100%; height: 100%;
-		background: linear-gradient(135deg, rgba(255,149,0,0.3), rgba(255,102,204,0.15), transparent);
+		background: linear-gradient(135deg, rgba(255, 90, 0,0.3), rgba(255,102,204,0.15), transparent);
 	}
 	.pc-avatar-wrap { padding: 0 16px; margin-top: -32px; }
 	.pc-avatar {
 		width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
-		border: 3px solid #0a0a0a; box-shadow: 0 0 0 2px rgba(255,149,0,0.25);
+		border: 3px solid #0a0a0a; box-shadow: 0 0 0 2px rgba(255, 90, 0,0.25);
 	}
 	.pc-avatar.fallback {
 		display: flex; align-items: center; justify-content: center;
-		background: rgba(255,149,0,0.18); color: #ff9500;
+		background: rgba(255, 90, 0,0.18); color: #ff5a00;
 		font-family: 'Courier New', monospace; font-weight: 800; font-size: 22px;
 	}
 	.pc-body { padding: 10px 16px 16px; }
 	.pc-head { display: flex; gap: 6px; align-items: center; }
 	.pc-head h3 { color: #fff; font-size: 16px; font-weight: 800; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.pc-head svg { color: #555; flex-shrink: 0; }
-	.profile-card:hover .pc-head svg { color: #ff9500; transform: translateX(2px); transition: 0.2s; }
+	.profile-card:hover .pc-head svg { color: #ff5a00; transform: translateX(2px); transition: 0.2s; }
 	.pc-addr {
 		font-family: 'Courier New', monospace;
 		color: #666; font-size: 11px; margin: 2px 0 10px;
@@ -627,7 +627,7 @@
 	}
 	.reset {
 		background: transparent; border: none;
-		color: #ff9500; font-size: 12px; cursor: pointer;
+		color: #ff5a00; font-size: 12px; cursor: pointer;
 		font-family: 'Courier New', monospace;
 	}
 	.reset:hover { color: #ffb733; text-decoration: underline; }

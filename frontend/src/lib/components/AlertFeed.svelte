@@ -207,7 +207,7 @@
 
 	.panel {
 		border: 1px solid #333;
-		border-radius: 0;
+		border-radius: 10px;
 		background: #0a0a0a;
 		overflow: hidden;
 		height: 320px;

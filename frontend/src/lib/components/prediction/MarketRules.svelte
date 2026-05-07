@@ -78,7 +78,7 @@
 	.rule-header {
 		font-size: 11px;
 		font-weight: 900;
-		color: #ff9500;
+		color: #ff5a00;
 		margin: 0;
 		text-transform: uppercase;
 		letter-spacing: 0.12em;
@@ -95,12 +95,12 @@
 		gap: 6px;
 	}
 	.category-tag {
-		background: rgba(255, 149, 0, 0.1);
-		color: #ff9500;
+		background: rgba(255, 90, 0, 0.1);
+		color: #ff5a00;
 		padding: 3px 10px;
 		border-radius: 12px;
 		font-size: 11px;
 		font-weight: 600;
-		border: 1px solid rgba(255, 149, 0, 0.25);
+		border: 1px solid rgba(255, 90, 0, 0.25);
 	}
 </style>

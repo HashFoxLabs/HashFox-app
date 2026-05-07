@@ -294,7 +294,7 @@
 		background: transparent; border: none; color: #888;
 		cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;
 	}
-	.icon-btn:hover { color: #ff9500; }
+	.icon-btn:hover { color: #ff5a00; }
 
 	.vc-body {
 		flex: 1; min-height: 0;
@@ -323,12 +323,12 @@
 		aspect-ratio: 16 / 9;
 		display: flex; align-items: center; justify-content: center;
 	}
-	.tile.local { border-color: rgba(255, 149, 0, 0.45); }
+	.tile.local { border-color: rgba(255, 90, 0, 0.45); }
 	.tile video { width: 100%; height: 100%; object-fit: cover; background: #000; }
 	.avatar-fallback {
 		width: 72px; height: 72px; border-radius: 50%;
-		background: rgba(255, 149, 0, 0.15);
-		color: #ff9500;
+		background: rgba(255, 90, 0, 0.15);
+		color: #ff5a00;
 		display: flex; align-items: center; justify-content: center;
 		font-family: 'Courier New', monospace; font-size: 28px; font-weight: 800;
 		overflow: hidden;
@@ -343,7 +343,7 @@
 		color: #fff; font-size: 11px; font-family: 'Courier New', monospace;
 	}
 	.tile-tag .you {
-		color: #ff9500; font-size: 10px; letter-spacing: 0.05em;
+		color: #ff5a00; font-size: 10px; letter-spacing: 0.05em;
 	}
 
 	.vc-foot {

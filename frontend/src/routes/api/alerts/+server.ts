@@ -1,7 +1,8 @@
 import type { RequestHandler } from './$types';
-import { getCachedAlerts, subscribeToAlerts } from '$lib/server/structAlerts';
+import { getCachedAlerts, initStructAlerts, subscribeToAlerts } from '$lib/server/structAlerts';
 
 export const GET: RequestHandler = ({ request }) => {
+	initStructAlerts();
 	const encoder = new TextEncoder();
 
 	const stream = new ReadableStream({
@@ -29,8 +30,7 @@ export const GET: RequestHandler = ({ request }) => {
 	return new Response(stream, {
 		headers: {
 			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
-			Connection: 'keep-alive'
+			'Cache-Control': 'no-cache'
 		}
 	});
 };

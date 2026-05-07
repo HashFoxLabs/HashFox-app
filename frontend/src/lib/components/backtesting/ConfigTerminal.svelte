@@ -137,7 +137,7 @@
 	let xtermInstance: any = $state(null);
 
 	// ANSI color constants — aligned with the rest of the app
-	const O = '\x1b[38;2;255;149;0m'; // canonical orange #ff9500
+	const O = '\x1b[38;2;255;90;0m'; // canonical orange #ff5a00
 	const G = '\x1b[38;5;42m';
 	const CY = '\x1b[38;5;45m';
 	const MAG = '\x1b[38;5;177m';
@@ -506,9 +506,9 @@
 			theme: {
 				background: '#000000',
 				foreground: '#e8e8e8',
-				cursor: '#ff9500',
+				cursor: '#ff5a00',
 				cursorAccent: '#000000',
-				selectionBackground: 'rgba(255,149,0,0.28)',
+				selectionBackground: 'rgba(255, 90, 0,0.28)',
 				black: '#000000',
 				red: '#ef4444',
 				green: '#10b981',
@@ -680,15 +680,15 @@
 	}
 	.hf-title-line {
 		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-		color: #ff9500;
+		color: #ff5a00;
 		font-weight: 900;
 		line-height: 1;
 		letter-spacing: 0.22em;
 		text-transform: uppercase;
 		text-shadow:
-			0 0 2px rgba(255, 149, 0, 0.65),
-			0 0 14px rgba(255, 149, 0, 0.35),
-			0 0 32px rgba(255, 149, 0, 0.18);
+			0 0 2px rgba(255, 90, 0, 0.65),
+			0 0 14px rgba(255, 90, 0, 0.35),
+			0 0 32px rgba(255, 90, 0, 0.18);
 	}
 	.hf-title-line--main {
 		font-size: clamp(32px, 6vw, 72px);
@@ -709,7 +709,7 @@
 		background: #000;
 		border: 1px solid rgba(255, 255, 255, 0.07);
 		box-shadow:
-			0 0 0 1px rgba(255, 149, 0, 0.06),
+			0 0 0 1px rgba(255, 90, 0, 0.06),
 			0 24px 60px rgba(0, 0, 0, 0.6);
 	}
 
@@ -768,11 +768,11 @@
 		white-space: nowrap;
 		text-overflow: ellipsis;
 	}
-	.hf-title-icon { color: #ff9500; margin-right: 4px; }
+	.hf-title-icon { color: #ff5a00; margin-right: 4px; }
 	.hf-title-text { color: #d6d6d6; font-weight: 600; }
 	.hf-title-sep { color: #5a5f69; }
 	.hf-title-host { color: #22d3ee; }
-	.hf-title-path { color: #ff9500; }
+	.hf-title-path { color: #ff5a00; }
 	.hf-title-shell { color: #5a5f69; margin-left: 6px; }
 
 	.hf-session {
@@ -828,7 +828,7 @@
 		background-color: #000 !important;
 		overflow-y: auto !important;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(255, 149, 0, 0.35) transparent;
+		scrollbar-color: rgba(255, 90, 0, 0.35) transparent;
 	}
 	.hf-terminal-host :global(.xterm-viewport::-webkit-scrollbar) {
 		width: 10px;
@@ -837,12 +837,12 @@
 		background: #000;
 	}
 	.hf-terminal-host :global(.xterm-viewport::-webkit-scrollbar-thumb) {
-		background: rgba(255, 149, 0, 0.35);
+		background: rgba(255, 90, 0, 0.35);
 		border-radius: 5px;
 		border: 2px solid #000;
 	}
 	.hf-terminal-host :global(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
-		background: rgba(255, 149, 0, 0.6);
+		background: rgba(255, 90, 0, 0.6);
 	}
 
 	.hf-statusbar {
@@ -865,7 +865,7 @@
 		text-transform: uppercase;
 	}
 	.hf-status-cell--accent {
-		color: #ff9500;
+		color: #ff5a00;
 		font-weight: 600;
 	}
 	.hf-status-cell--dim {
@@ -885,8 +885,8 @@
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: #ff9500;
-		box-shadow: 0 0 8px rgba(255, 149, 0, 0.7);
+		background: #ff5a00;
+		box-shadow: 0 0 8px rgba(255, 90, 0, 0.7);
 	}
 
 	@media (max-width: 780px) {

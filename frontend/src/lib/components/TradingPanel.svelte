@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { BN } from '$lib/vendor/anchor';
 	import { walletStore } from '$lib/wallet/stores';
 	import { pythPrices } from '$lib/stores/pythPrices';
@@ -16,6 +17,8 @@
 		USD_SCALE,
 		type MarketCategoryVariant
 	} from '$lib/hashfox';
+	import { compOpenMarketPosition, compOpenLimitOrder, fmtCountdown } from '$lib/competition';
+	import { activeCompetition, refreshActiveCompetition } from '$lib/stores/activeCompetition';
 	import { PERP_LEVERAGE_TIERS, type MarketEntry } from '$lib/markets';
 
 	let wallet: any = {};
@@ -29,6 +32,17 @@
 
 	let market: MarketEntry;
 	selectedMarket.subscribe((m) => (market = m));
+
+	let comp: any = { pubkey: null, view: null, loaded: false };
+	activeCompetition.subscribe((s) => (comp = s));
+
+	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
+	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
+	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
+
+	onMount(() => {
+		refreshActiveCompetition();
+	});
 
 	let tradeMode: 'spot' | 'perp' = 'spot';
 	let orderType: 'market' | 'limit' = 'market';
@@ -75,6 +89,14 @@
 			message = 'Price not available yet — waiting for Pyth stream.';
 			return;
 		}
+		if (tournamentPending) {
+			message = 'Tournament not started yet — waiting for the field to fill.';
+			return;
+		}
+		if (tournamentSettled) {
+			message = 'Tournament settled — claim your exit on /competition before trading.';
+			return;
+		}
 		busy = true;
 		message = 'Submitting…';
 		try {
@@ -85,39 +107,72 @@
 			const sl = stopLoss > 0 ? priceScaled(stopLoss) : new BN(0);
 
 			if (orderType === 'market') {
-				const sig = await openMarketPosition(program, wallet.publicKey, {
-					marketCategory: subCategoryToVariant(market.sub),
-					pairIndex: market.pairIndex,
-					tradeMode,
-					direction,
-					marginUsd,
-					leverage,
-					takeProfitPrice: tp,
-					stopLossPrice: sl,
-					entryPrice: priceScaled(current),
-					sessionToken
-				});
-				message = `Opened · ${sig.slice(0, 8)}…`;
+				let sig: string;
+				if (inTournament && comp.pubkey) {
+					sig = await compOpenMarketPosition(program, wallet.publicKey, comp.pubkey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode,
+						direction,
+						marginUsd,
+						leverage,
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						entryPrice: priceScaled(current),
+						sessionToken
+					});
+				} else {
+					sig = await openMarketPosition(program, wallet.publicKey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode,
+						direction,
+						marginUsd,
+						leverage,
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						entryPrice: priceScaled(current),
+						sessionToken
+					});
+				}
+				message = `Opened${inTournament ? ' · cup' : ''} · ${sig.slice(0, 8)}…`;
 			} else {
 				if (!limitPrice) {
 					message = 'Enter a limit price.';
 					busy = false;
 					return;
 				}
-				const sig = await openLimitOrder(program, wallet.publicKey, {
-					marketCategory: subCategoryToVariant(market.sub),
-					pairIndex: market.pairIndex,
-					tradeMode,
-					direction,
-					marginUsd,
-					leverage,
-					limitPrice: priceScaled(limitPrice),
-					takeProfitPrice: tp,
-					stopLossPrice: sl,
-					sessionToken
-				});
-				message = `Limit placed · ${sig.slice(0, 8)}…`;
+				let sig: string;
+				if (inTournament && comp.pubkey) {
+					sig = await compOpenLimitOrder(program, wallet.publicKey, comp.pubkey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode,
+						direction,
+						marginUsd,
+						leverage,
+						limitPrice: priceScaled(limitPrice),
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						sessionToken
+					});
+				} else {
+					sig = await openLimitOrder(program, wallet.publicKey, {
+						marketCategory: subCategoryToVariant(market.sub),
+						pairIndex: market.pairIndex,
+						tradeMode,
+						direction,
+						marginUsd,
+						leverage,
+						limitPrice: priceScaled(limitPrice),
+						takeProfitPrice: tp,
+						stopLossPrice: sl,
+						sessionToken
+					});
+				}
+				message = `Limit placed${inTournament ? ' · cup' : ''} · ${sig.slice(0, 8)}…`;
 			}
+			refreshActiveCompetition();
 		} catch (err: any) {
 			console.error(err);
 			message = err?.message ?? 'Trade failed.';
@@ -128,6 +183,24 @@
 </script>
 
 <div class="panel">
+	{#if comp.view}
+		<div class="comp-banner {comp.view.status}">
+			<div class="cb-left">
+				<span class="cb-dot"></span>
+				<span class="cb-tag">TOURNAMENT MODE</span>
+				<span class="cb-name">{comp.view.name}</span>
+			</div>
+			<div class="cb-right">
+				{#if comp.view.status === 'active'}
+					<span class="cb-meta">Ends in {fmtCountdown(comp.view.endTs)}</span>
+				{:else if comp.view.status === 'pending'}
+					<span class="cb-meta">Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants})</span>
+				{:else}
+					<span class="cb-meta">Settled — claim exit on /competition</span>
+				{/if}
+			</div>
+		</div>
+	{/if}
 	<div class="panel-header">
 		<div class="market-title">
 			<span class="m-cat">{market.category.toUpperCase()}</span>
@@ -215,6 +288,7 @@
 	.panel {
 		background: #121212;
 		border: 1px solid #222;
+		border-radius: 10px;
 		padding: 16px;
 		color: #ccc;
 		font-family: 'Courier New', monospace;
@@ -229,7 +303,7 @@
 		margin-bottom: 14px;
 	}
 	.m-cat { color: #888; font-size: 10px; letter-spacing: 0.1em; }
-	.m-sym { color: #ff9500; font-size: 20px; font-weight: bold; margin-left: 8px; }
+	.m-sym { color: #ff5a00; font-size: 20px; font-weight: bold; margin-left: 8px; }
 	.m-label { color: #666; font-size: 11px; margin-left: 6px; }
 	.p-value { color: #00ff00; font-size: 18px; font-weight: bold; }
 	.p-stream { color: #888; font-size: 9px; letter-spacing: 0.08em; margin-left: 8px; }
@@ -240,6 +314,7 @@
 	.tab {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #888;
 		padding: 5px 12px;
 		font-family: inherit;
@@ -248,13 +323,14 @@
 		cursor: pointer;
 		letter-spacing: 0.06em;
 	}
-	.tab.active { color: #ff9500; border-color: #ff9500; }
+	.tab.active { color: #ff5a00; border-color: #ff5a00; }
 	.tab:disabled { opacity: 0.4; cursor: not-allowed; }
 
 	.dir {
 		flex: 1;
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #666;
 		padding: 8px;
 		font-family: inherit;
@@ -280,13 +356,14 @@
 	.field input {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #fff;
 		padding: 8px 10px;
 		font-family: inherit;
 		font-size: 12px;
 		outline: none;
 	}
-	.field input:focus { border-color: #ff9500; }
+	.field input:focus { border-color: #ff5a00; }
 
 	.field-row { display: flex; gap: 10px; }
 
@@ -294,13 +371,14 @@
 	.lev {
 		background: #000;
 		border: 1px solid #333;
+		border-radius: 6px;
 		color: #888;
 		padding: 5px 9px;
 		font-family: inherit;
 		font-size: 11px;
 		cursor: pointer;
 	}
-	.lev.active { color: #ff9500; border-color: #ff9500; }
+	.lev.active { color: #ff5a00; border-color: #ff5a00; }
 
 	.submit {
 		width: 100%;
@@ -311,6 +389,7 @@
 		letter-spacing: 0.08em;
 		cursor: pointer;
 		border: none;
+		border-radius: 8px;
 		margin-top: 6px;
 	}
 	.submit.long { background: #00ff64; color: #000; }
@@ -322,7 +401,29 @@
 		padding: 8px 10px;
 		background: #0a0a0a;
 		border: 1px solid #222;
+		border-radius: 8px;
 		color: #ccc;
 		font-size: 11px;
 	}
+
+	.comp-banner {
+		display: flex; justify-content: space-between; align-items: center;
+		gap: 8px; flex-wrap: wrap;
+		padding: 8px 12px;
+		margin-bottom: 12px;
+		border-radius: 8px;
+		background: linear-gradient(180deg, rgba(0, 255, 102, 0.06), rgba(255, 255, 255, 0.01));
+		border: 1px solid rgba(0, 255, 102, 0.35);
+	}
+	.comp-banner.pending { background: linear-gradient(180deg, rgba(255, 90, 0, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 90, 0, 0.4); }
+	.comp-banner.settled { background: linear-gradient(180deg, rgba(255, 102, 204, 0.06), rgba(255, 255, 255, 0.01)); border-color: rgba(255, 102, 204, 0.4); }
+	.cb-left { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+	.cb-dot { width: 6px; height: 6px; border-radius: 50%; background: #00ff66; box-shadow: 0 0 8px rgba(0, 255, 102, 0.7); }
+	.comp-banner.pending .cb-dot { background: #ff5a00; box-shadow: 0 0 8px rgba(255, 90, 0, 0.7); }
+	.comp-banner.settled .cb-dot { background: #ff66cc; box-shadow: 0 0 8px rgba(255, 102, 204, 0.7); }
+	.cb-tag { color: #00ff66; font-family: 'Courier New', monospace; font-size: 9px; font-weight: 900; letter-spacing: 0.16em; }
+	.comp-banner.pending .cb-tag { color: #ff5a00; }
+	.comp-banner.settled .cb-tag { color: #ff66cc; }
+	.cb-name { color: #fff; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 800; }
+	.cb-meta { color: #aaa; font-family: 'Courier New', monospace; font-size: 10px; }
 </style>

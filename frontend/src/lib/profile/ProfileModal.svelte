@@ -124,7 +124,7 @@
 		max-width: 520px;
 		max-height: 90vh;
 		overflow: hidden;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 149, 0, 0.06) inset;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 90, 0, 0.06) inset;
 		font-family: 'Courier New', monospace;
 	}
 	.modal-header {
@@ -144,12 +144,12 @@
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: #ff9500;
-		box-shadow: 0 0 10px rgba(255, 149, 0, 0.7);
+		background: #ff5a00;
+		box-shadow: 0 0 10px rgba(255, 90, 0, 0.7);
 	}
 	.modal-header h3 {
 		margin: 0;
-		color: #ff9500;
+		color: #ff5a00;
 		font-size: 12px;
 		font-weight: bold;
 		letter-spacing: 0.25em;
@@ -169,8 +169,8 @@
 		transition: all 0.15s ease;
 	}
 	.close-button:hover {
-		color: #ff9500;
-		border-color: #ff9500;
+		color: #ff5a00;
+		border-color: #ff5a00;
 	}
 	.modal-body {
 		padding: 16px;
@@ -194,7 +194,7 @@
 		display: block;
 	}
 	.banner-fallback {
-		background: radial-gradient(circle at 30% 30%, rgba(255, 149, 0, 0.25), transparent 55%),
+		background: radial-gradient(circle at 30% 30%, rgba(255, 90, 0, 0.25), transparent 55%),
 			linear-gradient(180deg, #080808 0%, #000 100%);
 	}
 	.identity {
@@ -224,14 +224,14 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: #ff9500;
+		background: #ff5a00;
 		color: #000;
 		font-size: 16px;
 		font-weight: bold;
 	}
 	.meta { min-width: 0; }
 	.name {
-		color: #ff9500;
+		color: #ff5a00;
 		font-weight: bold;
 		letter-spacing: 0.04em;
 		font-size: 12px;

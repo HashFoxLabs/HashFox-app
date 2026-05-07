@@ -55,7 +55,7 @@
 				vertLine: {
 					visible: true,
 					labelVisible: false,
-					color: 'rgba(255,149,0,0.3)',
+					color: 'rgba(255, 90, 0,0.3)',
 					style: lc.LineStyle.Dashed
 				}
 			},
@@ -71,14 +71,14 @@
 			lineWidth: 2,
 			crosshairMarkerVisible: true,
 			crosshairMarkerRadius: 3,
-			crosshairMarkerBorderColor: '#ff9500',
+			crosshairMarkerBorderColor: '#ff5a00',
 			crosshairMarkerBackgroundColor: '#000',
 			priceFormat: { type: 'price', precision: 2, minMove: 0.01 }
 		});
 		series.setData(chartData);
 
 		const baseline = chart.addSeries(lc.LineSeries, {
-			color: 'rgba(255,149,0,0.22)',
+			color: 'rgba(255, 90, 0,0.22)',
 			lineWidth: 1,
 			lineStyle: lc.LineStyle.Dashed,
 			priceLineVisible: false,
