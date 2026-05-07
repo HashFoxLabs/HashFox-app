@@ -52,7 +52,7 @@
   #
   #   row["price"]      float  — last traded price
   #   row["market"]     str    — market name, e.g. "BTCUSDT"
-  #   row["qty"]     float  — tick volume
+  #   row["qty"]        float  — tick volume
   #   row["timestamp"]  int    — Unix ms  →  divide by 1000 for seconds
   #
   #   portfolio.cash            — available cash
@@ -68,48 +68,57 @@
   #   Updated user_perso_parameter
   #
   # No imports allowed in the sandbox.
-  # ─── Select a strategy from the panel on the right, or write your own ──
+  # ─── Pick a template on the left, or write your own ────────────────────
 
   signal = {"action": "HOLD", "quantity": 0.0}`;
 
 	let strategyBody = $state(DEFAULT_BODY);
 	let initialCapital = $state(10000);
-	let previewOpen = $state(true);
 	let selectedStrategyId = $state<string | null>(null);
+	let strategyFilter = $state('');
 
 	const strategies = $derived(strategiesForType(backtestType));
+	const filteredStrategies = $derived(
+		strategyFilter.trim()
+			? strategies.filter((s) =>
+				s.name.toLowerCase().includes(strategyFilter.toLowerCase()) ||
+				s.description.toLowerCase().includes(strategyFilter.toLowerCase())
+			)
+			: strategies
+	);
 
-	// Status bar state
 	let cursorLine = $state(1);
 	let cursorCol = $state(1);
 	let markerCount = $state(0);
 	let lastRunBody = $state('');
 	const isDirty = $derived(strategyBody !== lastRunBody);
 
-	// Monaco
 	let editorContainer: HTMLDivElement | undefined = $state();
 	let editor: MonacoType.editor.IStandaloneCodeEditor | null = null;
 	let monacoRef: typeof MonacoType | null = null;
 	let diagnosticTimer: ReturnType<typeof setTimeout> | null = null;
 	const disposables: MonacoType.IDisposable[] = [];
 
+	const STEPS = [
+		{ id: 1, label: 'Granularity', active: false, done: true  },
+		{ id: 2, label: 'Data',        active: false, done: true  },
+		{ id: 3, label: 'Strategy',    active: true,  done: false },
+		{ id: 4, label: 'Results',     active: false, done: false }
+	];
+
 	onMount(async () => {
 		if (!browser || !editorContainer) return;
 
-		// Set up workers before Monaco loads — Vite statically resolves `new URL(…, import.meta.url)`
+		const EditorWorker = (await import('monaco-editor/esm/vs/editor/editor.worker?worker')).default;
 		(self as unknown as Record<string, unknown>).MonacoEnvironment = {
-			getWorker(_moduleId: string, _label: string) {
-				return new Worker(
-					new URL('monaco-editor/esm/vs/editor/editor.worker', import.meta.url),
-					{ type: 'module' }
-				);
+			getWorker() {
+				return new EditorWorker();
 			}
 		};
 
 		const monaco = await import('monaco-editor');
 		monacoRef = monaco;
 
-		// ── Theme ──────────────────────────────────────────────────────────────
 		monaco.editor.defineTheme('hashfox-dark', {
 			base: 'vs-dark',
 			inherit: true,
@@ -179,19 +188,18 @@
 			}
 		} as MonacoType.editor.IStandaloneThemeData);
 
-		// ── Completion provider ────────────────────────────────────────────────
 		const ROW_FIELDS = [
-			{ label: '"price"',     detail: '(float) Last traded price at this tick.',                     doc: 'Last traded price.' },
-			{ label: '"market"',    detail: '(str) Market identifier, e.g. "BTC/USD".',                    doc: 'Market identifier.' },
-			{ label: '"volume"',    detail: '(float) Tick volume.',                                         doc: 'Tick volume.' },
-			{ label: '"side"',      detail: '(str) "buy" or "sell" — original trade direction.',            doc: '"buy" or "sell".' },
-			{ label: '"timestamp"', detail: '(int) Unix timestamp in milliseconds.',                        doc: 'Unix ms timestamp — divide by 1000 for seconds.' },
+			{ label: '"price"',     detail: '(float) Last traded price at this tick.', doc: 'Last traded price.' },
+			{ label: '"market"',    detail: '(str) Market identifier, e.g. "BTC/USD".', doc: 'Market identifier.' },
+			{ label: '"volume"',    detail: '(float) Tick volume.', doc: 'Tick volume.' },
+			{ label: '"side"',      detail: '(str) "buy" or "sell" — original trade direction.', doc: '"buy" or "sell".' },
+			{ label: '"timestamp"', detail: '(int) Unix timestamp in milliseconds.', doc: 'Unix ms timestamp — divide by 1000 for seconds.' },
 		];
 		const PORTFOLIO_FIELDS = [
-			{ label: 'cash',           detail: '(float) Available cash.',                                  doc: 'Available cash in the portfolio.' },
-			{ label: 'positions',      detail: '(dict) Open positions: {market: quantity}.',               doc: 'Currently open positions.' },
-			{ label: 'latest_prices',  detail: '(dict) Most recent price per market.',                     doc: 'Last seen price for every market loaded.' },
-			{ label: 'equity_curve',   detail: '(list[float]) Portfolio value at each tick so far.',       doc: 'Running equity curve.' },
+			{ label: 'cash',          detail: '(float) Available cash.', doc: 'Available cash in the portfolio.' },
+			{ label: 'positions',     detail: '(dict) Open positions: {market: quantity}.', doc: 'Currently open positions.' },
+			{ label: 'latest_prices', detail: '(dict) Most recent price per market.', doc: 'Last seen price for every market loaded.' },
+			{ label: 'equity_curve',  detail: '(list[float]) Portfolio value at each tick so far.', doc: 'Running equity curve.' },
 		];
 		const SNIPPETS = [
 			{
@@ -260,10 +268,7 @@
 			{
 				label: 'init-state',
 				detail: 'Snippet: Initialize user_perso_parameter',
-				insertText: [
-					'if user_perso_parameter is None:',
-					'  user_perso_parameter = {}',
-				].join('\n'),
+				insertText: ['if user_perso_parameter is None:', '  user_perso_parameter = {}'].join('\n'),
 			},
 		];
 
@@ -274,103 +279,77 @@
 					const lineText = model.getLineContent(position.lineNumber);
 					const before = lineText.substring(0, position.column - 1);
 					const wordInfo = model.getWordUntilPosition(position);
-					const replaceRange = new monaco.Range(
-						position.lineNumber, wordInfo.startColumn,
-						position.lineNumber, wordInfo.endColumn
-					);
-					const insertRange = new monaco.Range(
-						position.lineNumber, position.column,
-						position.lineNumber, position.column
-					);
-
+					const replaceRange = new monaco.Range(position.lineNumber, wordInfo.startColumn, position.lineNumber, wordInfo.endColumn);
+					const insertRange  = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
 					const suggestions: MonacoType.languages.CompletionItem[] = [];
 
 					if (before.endsWith('row[')) {
-						for (const f of ROW_FIELDS) {
-							suggestions.push({
-								label: f.label,
-								kind: monaco.languages.CompletionItemKind.Field,
-								detail: f.detail,
-								documentation: { value: f.doc },
-								insertText: f.label,
-								range: insertRange,
-							});
-						}
+						for (const f of ROW_FIELDS) suggestions.push({
+							label: f.label,
+							kind: monaco.languages.CompletionItemKind.Field,
+							detail: f.detail,
+							documentation: { value: f.doc },
+							insertText: f.label,
+							range: insertRange,
+						});
 					} else if (before.endsWith('portfolio.')) {
-						for (const f of PORTFOLIO_FIELDS) {
-							suggestions.push({
-								label: f.label,
-								kind: monaco.languages.CompletionItemKind.Field,
-								detail: f.detail,
-								documentation: { value: f.doc },
-								insertText: f.label,
-								range: insertRange,
-							});
-						}
+						for (const f of PORTFOLIO_FIELDS) suggestions.push({
+							label: f.label,
+							kind: monaco.languages.CompletionItemKind.Field,
+							detail: f.detail,
+							documentation: { value: f.doc },
+							insertText: f.label,
+							range: insertRange,
+						});
 					} else {
-						// General snippets
-						for (const s of SNIPPETS) {
-							suggestions.push({
-								label: s.label,
-								kind: monaco.languages.CompletionItemKind.Snippet,
-								detail: s.detail,
-								insertText: s.insertText,
-								insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-								range: replaceRange,
-							});
-						}
+						for (const s of SNIPPETS) suggestions.push({
+							label: s.label,
+							kind: monaco.languages.CompletionItemKind.Snippet,
+							detail: s.detail,
+							insertText: s.insertText,
+							insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+							range: replaceRange,
+						});
 					}
-
 					return { suggestions };
 				}
 			})
 		);
 
-		// ── Hover provider ─────────────────────────────────────────────────────
 		disposables.push(
 			monaco.languages.registerHoverProvider('python', {
 				provideHover(model, position) {
 					const word = model.getWordAtPosition(position);
 					if (!word) return null;
-
-					if (word.word === 'row') {
-						return {
-							contents: [
-								{ value: '**`row`** — current market tick (dict-like)' },
-								{ value: '| Key | Type | Description |\n|---|---|---|\n| `row["price"]` | `float` | Last traded price |\n| `row["market"]` | `str` | Market identifier |\n| `row["volume"]` | `float` | Tick volume |\n| `row["side"]` | `str` | `"buy"` or `"sell"` |\n| `row["timestamp"]` | `int` | Unix ms — divide by 1000 for seconds |' },
-							]
-						};
-					}
-					if (word.word === 'portfolio') {
-						return {
-							contents: [
-								{ value: '**`portfolio`** — current portfolio state' },
-								{ value: '| Attribute | Type | Description |\n|---|---|---|\n| `portfolio.cash` | `float` | Available cash |\n| `portfolio.positions` | `dict` | `{market: quantity}` |\n| `portfolio.latest_prices` | `dict` | Last price per market |\n| `portfolio.equity_curve` | `list` | Portfolio value history |' },
-							]
-						};
-					}
-					if (word.word === 'user_perso_parameter') {
-						return {
-							contents: [
-								{ value: '**`user_perso_parameter`** — your persistent state across ticks' },
-								{ value: 'Starts as `None` on the first row. Whatever you return is passed back on the next tick.\n\n```python\nif user_perso_parameter is None:\n    user_perso_parameter = {}\n```' },
-							]
-						};
-					}
-					if (word.word === 'signal') {
-						return {
-							contents: [
-								{ value: '**`signal`** — trade instruction to return' },
-								{ value: '```python\nsignal = {\n    "action": "BUY",   # "BUY" | "SELL" | "HOLD"\n    "quantity": 1.0,   # units (ignored for HOLD)\n    # "market": "AAPL"  # optional, defaults to row["market"]\n}\n```' },
-							]
-						};
-					}
+					if (word.word === 'row') return {
+						contents: [
+							{ value: '**`row`** — current market tick (dict-like)' },
+							{ value: '| Key | Type | Description |\n|---|---|---|\n| `row["price"]` | `float` | Last traded price |\n| `row["market"]` | `str` | Market identifier |\n| `row["volume"]` | `float` | Tick volume |\n| `row["side"]` | `str` | `"buy"` or `"sell"` |\n| `row["timestamp"]` | `int` | Unix ms — divide by 1000 for seconds |' },
+						]
+					};
+					if (word.word === 'portfolio') return {
+						contents: [
+							{ value: '**`portfolio`** — current portfolio state' },
+							{ value: '| Attribute | Type | Description |\n|---|---|---|\n| `portfolio.cash` | `float` | Available cash |\n| `portfolio.positions` | `dict` | `{market: quantity}` |\n| `portfolio.latest_prices` | `dict` | Last price per market |\n| `portfolio.equity_curve` | `list` | Portfolio value history |' },
+						]
+					};
+					if (word.word === 'user_perso_parameter') return {
+						contents: [
+							{ value: '**`user_perso_parameter`** — your persistent state across ticks' },
+							{ value: 'Starts as `None` on the first row. Whatever you return is passed back on the next tick.\n\n```python\nif user_perso_parameter is None:\n    user_perso_parameter = {}\n```' },
+						]
+					};
+					if (word.word === 'signal') return {
+						contents: [
+							{ value: '**`signal`** — trade instruction to return' },
+							{ value: '```python\nsignal = {\n    "action": "BUY",   # "BUY" | "SELL" | "HOLD"\n    "quantity": 1.0,   # units (ignored for HOLD)\n    # "market": "AAPL"  # optional, defaults to row["market"]\n}\n```' },
+						]
+					};
 					return null;
 				}
 			})
 		);
 
-		// ── Create editor ──────────────────────────────────────────────────────
 		editor = monaco.editor.create(editorContainer!, {
 			value: strategyBody,
 			language: 'python',
@@ -393,37 +372,22 @@
 			tabSize: 2,
 			insertSpaces: true,
 			wordWrap: 'off',
-			scrollbar: {
-				verticalScrollbarSize: 8,
-				horizontalScrollbarSize: 8,
-			},
-			suggest: {
-				showSnippets: true,
-				showFields: true,
-				showKeywords: true,
-			},
+			scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+			suggest: { showSnippets: true, showFields: true, showKeywords: true },
 			quickSuggestions: { other: true, comments: false, strings: true },
 			quickSuggestionsDelay: 80,
 			acceptSuggestionOnEnter: 'smart',
 		});
 
-		// Listen for content changes
-		disposables.push(
-			editor.onDidChangeModelContent(() => {
-				strategyBody = editor!.getValue();
-				scheduleDiagnostics();
-			})
-		);
+		disposables.push(editor.onDidChangeModelContent(() => {
+			strategyBody = editor!.getValue();
+			scheduleDiagnostics();
+		}));
+		disposables.push(editor.onDidChangeCursorPosition((e) => {
+			cursorLine = e.position.lineNumber;
+			cursorCol = e.position.column;
+		}));
 
-		// Listen for cursor position
-		disposables.push(
-			editor.onDidChangeCursorPosition((e) => {
-				cursorLine = e.position.lineNumber;
-				cursorCol = e.position.column;
-			})
-		);
-
-		// Initial diagnostics run
 		scheduleDiagnostics();
 	});
 
@@ -444,41 +408,33 @@
 		if (!editor || !monacoRef) return;
 		const model = editor.getModel();
 		if (!model) return;
-
 		const markers: MonacoType.editor.IMarkerData[] = [];
 		const lines = model.getLinesContent();
 
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
 			const lineNum = i + 1;
-
 			if (/^\s*(import\s|from\s+\S+\s+import)/.test(line)) {
 				markers.push({
 					severity: monacoRef.MarkerSeverity.Error,
-					startLineNumber: lineNum,
-					startColumn: 1,
-					endLineNumber: lineNum,
-					endColumn: line.length + 1,
+					startLineNumber: lineNum, startColumn: 1,
+					endLineNumber: lineNum, endColumn: line.length + 1,
 					message: 'No imports allowed in the sandbox.',
 					source: 'HashFox sandbox',
 				});
 			}
-
 			const dunders = /__import__|__builtins__/g;
 			let match;
 			while ((match = dunders.exec(line)) !== null) {
 				markers.push({
 					severity: monacoRef.MarkerSeverity.Error,
-					startLineNumber: lineNum,
-					startColumn: match.index + 1,
-					endLineNumber: lineNum,
-					endColumn: match.index + match[0].length + 1,
+					startLineNumber: lineNum, startColumn: match.index + 1,
+					endLineNumber: lineNum, endColumn: match.index + match[0].length + 1,
 					message: 'Disallowed in sandbox.',
 					source: 'HashFox sandbox',
 				});
 			}
 		}
-
 		monacoRef.editor.setModelMarkers(model, 'hashfox-sandbox', markers);
 		markerCount = markers.length;
 	}
@@ -501,288 +457,379 @@
 	}
 
 	function run() {
+		if (markerCount > 0) return;
 		lastRunBody = strategyBody;
 		const strategy_code = `${FIRST_LINE}\n${normalizeTabs(strategyBody)}\n${LAST_LINE}`;
 		onRun({ paths, strategy_code, initial_capital: initialCapital, start_date: startDate, end_date: endDate });
 	}
 
-	function fmtRows(n: number): string {
-		if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-		if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-		return String(n);
+	function fmtRange(): string {
+		if (!startDate && !endDate) return 'all time';
+		return `${startDate ?? 'beginning'} → ${endDate ?? 'today'}`;
 	}
+
+	// Avoid unused-prop warning while keeping API stable
+	previewData;
 </script>
 
 <div class="step2">
-	<!-- Left: data preview panel -->
-	<aside class="left">
-		<div class="left-head">
-			<button class="back-btn" onclick={onBack}>← Back</button>
-			<span class="section-label">DATA PREVIEW</span>
-			<button class="toggle-btn" onclick={() => (previewOpen = !previewOpen)}>
-				{previewOpen ? '▲' : '▼'}
-			</button>
+	<!-- Top bar -->
+	<header class="topbar">
+		<button class="back-btn" onclick={onBack}>← Data</button>
+
+		<div class="stepper">
+			{#each STEPS as s, i}
+				<div class="step" class:active={s.active} class:done={s.done}>
+					<span class="step-num">{s.done ? '✓' : s.id}</span>
+					<span class="step-name">{s.label}</span>
+				</div>
+				{#if i < STEPS.length - 1}<span class="step-bar" class:done={s.done}></span>{/if}
+			{/each}
 		</div>
 
-		{#if previewOpen}
-			{#if previewData}
-				<div class="preview-meta">{previewData.returned_rows} rows · {fmtRows(previewData.total_rows)} total</div>
-				<div class="preview-scroll">
-					<table class="preview-tbl">
-						<thead>
-							<tr>
-								{#each previewData.columns as col}
-									<th>{col}</th>
-								{/each}
-							</tr>
-						</thead>
-						<tbody>
-							{#each previewData.rows as row}
-								<tr>
-									{#each previewData.columns as col}
-										<td>{row[col] ?? ''}</td>
-									{/each}
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{:else}
-				<div class="preview-empty">No preview — go back and click "Visualize data" first.</div>
-			{/if}
+		<button class="btn run" onclick={run} disabled={markerCount > 0}>
+			<span class="run-icon">▶</span> Run Backtest
+		</button>
+	</header>
+
+	<!-- Context strip: paths + dates + capital -->
+	<div class="ctx-strip">
+		<div class="ctx-item">
+			<span class="ctx-label">Files</span>
+			<span class="ctx-val">{paths.length}</span>
+		</div>
+		<span class="ctx-sep"></span>
+		<div class="ctx-item">
+			<span class="ctx-label">Range</span>
+			<span class="ctx-val">{fmtRange()}</span>
+		</div>
+		<span class="ctx-sep"></span>
+		<div class="ctx-item ctx-capital">
+			<span class="ctx-label">Initial capital</span>
+			<div class="capital-input-wrap">
+				<span class="capital-prefix">$</span>
+				<input class="capital-input" type="number" min="1" bind:value={initialCapital} />
+			</div>
+		</div>
+		<span class="ctx-sep"></span>
+		<div class="ctx-item">
+			<span class="ctx-label">Mode</span>
+			<span class="ctx-pill {backtestType}">{backtestType === 'longrun' ? 'Long-Run' : 'High-Frequency'}</span>
+		</div>
+		{#if isDirty && lastRunBody}
+			<div class="dirty-flag" title="Unsaved changes since last run">● unsaved</div>
 		{/if}
+	</div>
 
-		<div class="paths-info">
-			<span class="pi-label">Paths:</span>
-			<span class="pi-val">{paths.length} file{paths.length !== 1 ? 's' : ''}</span>
-		</div>
-	</aside>
-
-	<!-- Right: strategy editor + gallery -->
-	<section class="right">
-		<div class="right-head">
-			<span class="section-label">STEP 2 · WRITE STRATEGY</span>
-			<button class="btn run" onclick={run}>Run Backtest →</button>
-		</div>
-
-		<div class="right-body">
-			<!-- Editor column -->
-			<div class="editor-col">
-				<div class="editor-wrap">
-					<!-- Fixed first line -->
-					<div class="fixed-line first-line">{FIRST_LINE}</div>
-
-					<!-- Monaco editor -->
-					<div class="monaco-host" bind:this={editorContainer}></div>
-
-					<!-- Fixed last line -->
-					<div class="fixed-line last-line">{LAST_LINE}</div>
-
-					<!-- Status bar -->
-					<div class="status-bar">
-						<span class="sb-item">Ln {cursorLine}, Col {cursorCol}</span>
-						<span class="sb-sep">·</span>
-						<span class="sb-item">Spaces: 2</span>
-						<span class="sb-sep">·</span>
-						<span class="sb-item sb-lang">Python · sandboxed</span>
-						{#if markerCount > 0}
-							<span class="sb-sep">·</span>
-							<span class="sb-item sb-errors">⊘ {markerCount} error{markerCount !== 1 ? 's' : ''}</span>
-						{/if}
-						{#if isDirty}
-							<span class="sb-dot"></span>
-						{/if}
-					</div>
-				</div>
-
-				<!-- Run parameters -->
-				<div class="params">
-					<div class="params-head">RUN PARAMETERS</div>
-					<div class="params-grid">
-						<label>
-							<span>Initial capital ($)</span>
-							<input type="number" min="1" bind:value={initialCapital} />
-						</label>
-						<div class="date-info">
-							<span class="di-label">Date range</span>
-							<span class="di-val">{startDate ?? 'all time'} → {endDate ?? 'all time'}</span>
+	<div class="body">
+		<!-- Left: strategy gallery -->
+		<aside class="gallery">
+			<div class="gallery-head">
+				<span class="gallery-title">TEMPLATES</span>
+				<span class="gallery-count">{filteredStrategies.length}</span>
+			</div>
+			<div class="gallery-search-wrap">
+				<svg class="gallery-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+					<circle cx="11" cy="11" r="7"/>
+					<path d="m21 21-4.3-4.3"/>
+				</svg>
+				<input
+					class="gallery-search"
+					type="text"
+					placeholder="Filter templates…"
+					bind:value={strategyFilter}
+				/>
+			</div>
+			<div class="gallery-list">
+				{#each filteredStrategies as s}
+					<button
+						class="strategy-card"
+						class:active={selectedStrategyId === s.id}
+						onclick={() => loadStrategy(s)}
+					>
+						<div class="sc-top">
+							<span class="sc-name">{s.name}</span>
+							<span class="sc-badge sc-badge--{s.difficulty.toLowerCase()}">{s.difficulty}</span>
 						</div>
-					</div>
+						<p class="sc-desc">{s.description}</p>
+					</button>
+				{:else}
+					<div class="gallery-empty">No templates match.</div>
+				{/each}
+			</div>
+		</aside>
+
+		<!-- Right: editor -->
+		<section class="editor-pane">
+			<div class="editor-wrap">
+				<div class="fixed-line first-line">{FIRST_LINE}</div>
+				<div class="monaco-host" bind:this={editorContainer}></div>
+				<div class="fixed-line last-line">{LAST_LINE}</div>
+
+				<div class="status-bar">
+					<span class="sb-item">Ln {cursorLine}, Col {cursorCol}</span>
+					<span class="sb-sep">·</span>
+					<span class="sb-item">Spaces: 2</span>
+					<span class="sb-sep">·</span>
+					<span class="sb-item sb-lang">Python · sandboxed</span>
+					{#if markerCount > 0}
+						<span class="sb-sep">·</span>
+						<span class="sb-item sb-errors">⊘ {markerCount} error{markerCount !== 1 ? 's' : ''}</span>
+					{/if}
+					<span class="sb-spacer"></span>
+					{#if isDirty && lastRunBody}<span class="sb-dot" title="Unsaved changes"></span>{/if}
 				</div>
 			</div>
-
-			<!-- Strategy gallery -->
-			<aside class="gallery">
-				<div class="gallery-head">POPULAR STRATEGIES</div>
-				<div class="gallery-list">
-					{#each strategies as s}
-						<button
-							class="strategy-card"
-							class:active={selectedStrategyId === s.id}
-							onclick={() => loadStrategy(s)}
-						>
-							<div class="sc-top">
-								<span class="sc-name">{s.name}</span>
-								<span class="sc-badge sc-badge--{s.difficulty.toLowerCase()}">{s.difficulty}</span>
-							</div>
-							<p class="sc-desc">{s.description}</p>
-						</button>
-					{/each}
-				</div>
-			</aside>
-		</div>
-	</section>
+		</section>
+	</div>
 </div>
 
 <style>
 	.step2 {
 		flex: 1;
 		min-height: 0;
-		display: grid;
-		grid-template-columns: 340px 1fr;
+		display: flex;
+		flex-direction: column;
 		background: #000;
 		overflow: hidden;
 	}
 
-	/* Left */
-	.left {
-		border-right: 1px solid #1a1a1a;
-		background: #060606;
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		overflow: hidden;
-	}
-	.left-head {
+	/* Top bar */
+	.topbar {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 10px 12px;
+		justify-content: space-between;
+		padding: 10px 16px;
 		border-bottom: 1px solid #1a1a1a;
+		background: rgba(8,8,8,0.85);
+		backdrop-filter: blur(6px);
+		gap: 14px;
 		flex-shrink: 0;
 	}
 	.back-btn {
 		background: transparent;
-		border: 1px solid #333;
+		border: 1px solid #2a2a2a;
 		color: #bdbdbd;
-		padding: 4px 10px;
-		border-radius: 6px;
+		padding: 6px 12px;
+		border-radius: 8px;
 		font-size: 11px;
 		font-family: 'Share Tech Mono', monospace;
 		cursor: pointer;
-	}
-	.back-btn:hover { border-color: rgba(255, 90, 0,0.5); color: #ff5a00; }
-	.section-label {
-		flex: 1;
-		font-family: 'Share Tech Mono', monospace;
-		letter-spacing: 0.1em;
-		font-size: 10px;
-		color: #ff5a00;
-		text-align: center;
-	}
-	.toggle-btn {
-		background: transparent;
-		border: none;
-		color: #555;
-		font-size: 10px;
-		cursor: pointer;
-		padding: 2px 4px;
-	}
-	.preview-meta {
-		padding: 5px 10px;
-		font-size: 10px;
-		font-family: 'Share Tech Mono', monospace;
-		color: #555;
-		border-bottom: 1px solid #111;
-		flex-shrink: 0;
-	}
-	.preview-scroll {
-		flex: 1;
-		overflow: auto;
-		min-height: 0;
-		scrollbar-width: thin;
-		scrollbar-color: rgba(255, 90, 0,0.25) transparent;
-	}
-	.preview-tbl {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: 10px;
-		font-family: 'Share Tech Mono', monospace;
-	}
-	.preview-tbl th {
-		position: sticky;
-		top: 0;
-		background: #060606;
-		color: #ff5a00;
-		padding: 6px 8px;
-		text-align: left;
-		border-bottom: 1px solid #1a1a1a;
-		white-space: nowrap;
-		letter-spacing: 0.05em;
-	}
-	.preview-tbl td {
-		padding: 4px 8px;
-		border-bottom: 1px solid rgba(255,255,255,0.03);
-		color: #9a9a9a;
 		white-space: nowrap;
 	}
-	.preview-empty {
-		padding: 16px 12px;
-		font-size: 11px;
-		font-family: 'Share Tech Mono', monospace;
-		color: #444;
-	}
-	.paths-info {
-		padding: 8px 12px;
-		border-top: 1px solid #1a1a1a;
-		flex-shrink: 0;
-		display: flex;
-		gap: 6px;
-		font-family: 'Share Tech Mono', monospace;
-		font-size: 10px;
-	}
-	.pi-label { color: #555; }
-	.pi-val { color: #888; }
+	.back-btn:hover { border-color: rgba(255, 90, 0, 0.5); color: #ff5a00; }
 
-	/* Right */
-	.right {
+	.stepper {
 		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		overflow: hidden;
+		align-items: center;
+		gap: 6px;
+		flex: 1;
+		justify-content: center;
 	}
-	.right-body {
+	.step {
+		display: flex; align-items: center; gap: 7px;
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 11px; color: #555;
+	}
+	.step-num {
+		display: inline-flex; align-items: center; justify-content: center;
+		width: 18px; height: 18px;
+		border-radius: 50%;
+		border: 1px solid #2a2a2a;
+		font-size: 10px; color: #555;
+		background: #050505;
+	}
+	.step.active { color: #ff5a00; }
+	.step.active .step-num {
+		border-color: rgba(255,90,0,0.55); color: #ff5a00;
+		background: rgba(255,90,0,0.08);
+		box-shadow: 0 0 10px rgba(255,90,0,0.25);
+	}
+	.step.done { color: #777; }
+	.step.done .step-num {
+		border-color: #26a65b; color: #26a65b;
+		background: rgba(38,166,91,0.06);
+	}
+	.step-bar { width: 18px; height: 1px; background: #1f1f1f; }
+	.step-bar.done { background: #26a65b55; }
+
+	.btn {
+		background: #111;
+		border: 1px solid #2a2a2a;
+		color: #e8e8e8;
+		padding: 7px 14px;
+		border-radius: 8px;
+		font-size: 12px;
+		cursor: pointer;
+		font-family: 'Share Tech Mono', monospace;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		white-space: nowrap;
+	}
+	.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+	.btn.run {
+		background: linear-gradient(180deg, rgba(255, 90, 0, 0.95), rgba(255, 90, 0, 0.72));
+		border-color: rgba(255, 90, 0, 0.6);
+		color: #000;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+	}
+	.btn.run:not(:disabled):hover { filter: brightness(1.08); }
+	.run-icon { font-size: 9px; }
+
+	/* Context strip */
+	.ctx-strip {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		padding: 8px 16px;
+		background: #050505;
+		border-bottom: 1px solid #131313;
+		flex-shrink: 0;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.ctx-strip::-webkit-scrollbar { display: none; }
+	.ctx-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 11px;
+	}
+	.ctx-label {
+		color: #555;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 9px;
+	}
+	.ctx-val { color: #d8d8d8; }
+	.ctx-sep {
+		width: 1px; height: 16px;
+		background: #1f1f1f;
+		flex-shrink: 0;
+	}
+	.ctx-pill {
+		padding: 2px 8px;
+		border-radius: 999px;
+		font-size: 10px;
+		font-family: 'Share Tech Mono', monospace;
+	}
+	.ctx-pill.highfrequency {
+		background: rgba(255,90,0,0.1);
+		border: 1px solid rgba(255,90,0,0.3);
+		color: #ff5a00;
+	}
+	.ctx-pill.longrun {
+		background: rgba(99,179,237,0.1);
+		border: 1px solid rgba(99,179,237,0.3);
+		color: #63b3ed;
+	}
+	.ctx-capital { gap: 6px; }
+	.capital-input-wrap {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+	.capital-prefix {
+		position: absolute;
+		left: 8px;
+		color: #555;
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 11px;
+		pointer-events: none;
+	}
+	.capital-input {
+		background: #0a0a0a;
+		border: 1px solid #1f1f1f;
+		border-radius: 6px;
+		padding: 4px 8px 4px 18px;
+		color: #e8e8e8;
+		outline: none;
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 11px;
+		width: 90px;
+	}
+	.capital-input:focus { border-color: rgba(255, 90, 0,0.4); }
+	.dirty-flag {
+		margin-left: auto;
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 10px;
+		color: #ff5a00;
+		opacity: 0.8;
+	}
+
+	/* Body */
+	.body {
 		flex: 1;
 		min-height: 0;
 		display: grid;
-		grid-template-columns: 1fr 240px;
+		grid-template-columns: 280px 1fr;
 		overflow: hidden;
-	}
-	.editor-col {
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		overflow: hidden;
-		border-right: 1px solid #1a1a1a;
 	}
 
 	/* Gallery */
 	.gallery {
 		background: #060606;
+		border-right: 1px solid #1a1a1a;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
 		overflow: hidden;
 	}
 	.gallery-head {
-		padding: 10px 12px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 12px 14px;
 		border-bottom: 1px solid #1a1a1a;
-		font-family: 'Share Tech Mono', monospace;
-		font-size: 10px;
-		letter-spacing: 0.12em;
-		color: #ff5a00;
 		flex-shrink: 0;
 	}
+	.gallery-title {
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 10px;
+		letter-spacing: 0.14em;
+		color: #ff5a00;
+	}
+	.gallery-count {
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 10px;
+		color: #555;
+		background: #0d0d0d;
+		border: 1px solid #1f1f1f;
+		border-radius: 999px;
+		padding: 1px 8px;
+	}
+	.gallery-search-wrap {
+		position: relative;
+		padding: 8px 10px;
+		border-bottom: 1px solid #131313;
+		flex-shrink: 0;
+	}
+	.gallery-search-icon {
+		position: absolute;
+		left: 18px; top: 50%;
+		transform: translateY(-50%);
+		width: 11px; height: 11px;
+		color: #555;
+		pointer-events: none;
+	}
+	.gallery-search {
+		width: 100%;
+		background: #0a0a0a;
+		border: 1px solid #1c1c1c;
+		border-radius: 6px;
+		padding: 6px 10px 6px 26px;
+		color: #e8e8e8;
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 11px;
+		outline: none;
+		box-sizing: border-box;
+	}
+	.gallery-search:focus { border-color: rgba(255, 90, 0,0.4); }
+	.gallery-search::placeholder { color: #444; }
+
 	.gallery-list {
 		flex: 1;
 		overflow-y: auto;
@@ -792,6 +839,13 @@
 		gap: 6px;
 		scrollbar-width: thin;
 		scrollbar-color: rgba(255, 90, 0,0.25) transparent;
+	}
+	.gallery-empty {
+		padding: 16px 8px;
+		font-family: 'Share Tech Mono', monospace;
+		font-size: 11px;
+		color: #444;
+		text-align: center;
 	}
 	.strategy-card {
 		background: #0a0a0a;
@@ -836,7 +890,7 @@
 		flex-shrink: 0;
 	}
 	.sc-badge--beginner     { background: rgba(38,166,91,0.12);  color: #26a65b; border: 1px solid rgba(38,166,91,0.3); }
-	.sc-badge--intermediate { background: rgba(255, 90, 0,0.12);  color: #ff5a00; border: 1px solid rgba(255, 90, 0,0.3); }
+	.sc-badge--intermediate { background: rgba(255, 90, 0,0.12); color: #ff5a00; border: 1px solid rgba(255, 90, 0,0.3); }
 	.sc-badge--advanced     { background: rgba(239,83,80,0.1);   color: #ef5350; border: 1px solid rgba(239,83,80,0.25); }
 	.sc-desc {
 		margin: 0;
@@ -847,29 +901,13 @@
 	}
 	.strategy-card.active .sc-desc { color: #777; }
 
-	.right-head {
+	/* Editor pane */
+	.editor-pane {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 12px 14px;
-		border-bottom: 1px solid #1a1a1a;
-		background: #000;
-		flex-shrink: 0;
+		flex-direction: column;
+		min-height: 0;
+		overflow: hidden;
 	}
-	.btn.run {
-		background: linear-gradient(180deg, rgba(255, 90, 0, 0.95), rgba(255, 90, 0, 0.72));
-		border: 1px solid rgba(255, 90, 0, 0.6);
-		color: #000;
-		font-weight: 700;
-		padding: 7px 14px;
-		border-radius: 8px;
-		font-size: 12px;
-		font-family: 'Share Tech Mono', monospace;
-		cursor: pointer;
-		letter-spacing: 0.05em;
-	}
-	.btn.run:hover { filter: brightness(1.08); }
-
 	.editor-wrap {
 		flex: 1;
 		min-height: 0;
@@ -879,7 +917,7 @@
 	}
 	.fixed-line {
 		background: #040404;
-		padding: 5px 14px 5px 74px; /* 74px aligns with Monaco's default gutter */
+		padding: 5px 14px 5px 74px;
 		font-family: 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
 		font-size: 13px;
 		line-height: 22px;
@@ -895,21 +933,16 @@
 		min-height: 0;
 		overflow: hidden;
 	}
-	.monaco-host :global(.monaco-editor) {
-		height: 100%;
-	}
-	.monaco-host :global(.monaco-editor .overflow-guard) {
-		height: 100% !important;
-	}
+	.monaco-host :global(.monaco-editor) { height: 100%; }
+	.monaco-host :global(.monaco-editor .overflow-guard) { height: 100% !important; }
 
-	/* Status bar */
 	.status-bar {
-		height: 22px;
+		height: 24px;
 		background: #060606;
 		border-top: 1px solid #111;
 		display: flex;
 		align-items: center;
-		padding: 0 12px;
+		padding: 0 14px;
 		gap: 6px;
 		flex-shrink: 0;
 		font-family: 'Share Tech Mono', monospace;
@@ -921,74 +954,18 @@
 	.sb-sep { color: #2a2a2a; }
 	.sb-lang { color: #ff5a00; opacity: 0.7; }
 	.sb-errors { color: #ef5350; }
+	.sb-spacer { flex: 1; }
 	.sb-dot {
-		width: 6px;
-		height: 6px;
+		width: 6px; height: 6px;
 		border-radius: 50%;
 		background: #ff5a00;
 		flex-shrink: 0;
-		margin-left: auto;
 		box-shadow: 0 0 6px rgba(255, 90, 0,0.5);
 	}
 
-	/* Params */
-	.params {
-		background: #060606;
-		border-top: 1px solid #1a1a1a;
-		padding: 10px 14px 14px;
-		flex-shrink: 0;
-	}
-	.params-head {
-		font-family: 'Share Tech Mono', monospace;
-		letter-spacing: 0.12em;
-		font-size: 10px;
-		color: #777;
-		margin-bottom: 10px;
-	}
-	.params-grid {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 10px;
-		align-items: end;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		font-size: 11px;
-		color: #bdbdbd;
-		font-family: 'Share Tech Mono', monospace;
-	}
-	input {
-		background: #0a0a0a;
-		border: 1px solid #222;
-		border-radius: 8px;
-		padding: 7px 10px;
-		color: #e8e8e8;
-		outline: none;
-		font-family: 'Share Tech Mono', monospace;
-		font-size: 12px;
-	}
-	input:focus { border-color: rgba(255, 90, 0,0.4); }
-
-	.date-info {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		font-family: 'Share Tech Mono', monospace;
-		font-size: 11px;
-	}
-	.di-label { color: #666; }
-	.di-val { color: #bdbdbd; }
-
-	@media (max-width: 1200px) {
-		.right-body { grid-template-columns: 1fr 200px; }
-	}
 	@media (max-width: 1000px) {
-		.step2 { grid-template-columns: 1fr; }
-		.left { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 220px; }
-		.right-body { grid-template-columns: 1fr; }
-		.gallery { border-top: 1px solid #1a1a1a; max-height: 200px; }
-		.params-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.body { grid-template-columns: 1fr; }
+		.gallery { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 220px; }
+		.step-name { display: none; }
 	}
 </style>
