@@ -23,10 +23,11 @@
 	import { Connection, Keypair } from '@solana/web3.js';
 	import { AnchorProvider, Program, type Idl } from '$lib/vendor/anchor';
 	import { SOLANA_RPC } from '$lib/env';
+	import { patchConnection } from '$lib/solana/connection';
 	import hashfoxIdl from '$lib/idl/hashfox.json';
 
 	function buildReadOnlyProgram(): any {
-		const conn = new Connection(SOLANA_RPC, 'confirmed');
+		const conn = patchConnection(new Connection(SOLANA_RPC, 'confirmed'));
 		const dummy = Keypair.generate();
 		const wallet = {
 			publicKey: dummy.publicKey,

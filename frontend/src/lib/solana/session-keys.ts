@@ -10,6 +10,7 @@ import { AnchorProvider, BN, Program, type Idl } from '$lib/vendor/anchor';
 import { sessionIdl } from '@magicblock-labs/bolt-sdk/lib/generated';
 import bs58 from 'bs58';
 import { SOLANA_RPC, HASHFOX_PROGRAM_ID } from '$lib/env';
+import { patchConnection } from '$lib/solana/connection';
 import { sessionKey } from '$lib/stores/sessionKey';
 
 export const SESSION_KEYS_PROGRAM_ID = new PublicKey('KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5');
@@ -59,7 +60,7 @@ export class SessionKeyManager {
 	private sessionProgram: any | null = null;
 
 	constructor() {
-		this.connection = new Connection(SOLANA_RPC, 'confirmed');
+		this.connection = patchConnection(new Connection(SOLANA_RPC, 'confirmed'));
 	}
 
 	private getSessionProgram(): any {

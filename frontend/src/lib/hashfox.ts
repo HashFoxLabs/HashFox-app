@@ -2,6 +2,7 @@ import { AnchorProvider, Program, BN, type BNType, type Idl } from '$lib/vendor/
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import type { Adapter, SignerWalletAdapter } from '@solana/wallet-adapter-base';
 import { HASHFOX_PROGRAM_ID, SOLANA_RPC } from './env';
+import { patchConnection } from './solana/connection';
 import idlJson from './idl/hashfox.json';
 
 export const PROGRAM_ID = new PublicKey(HASHFOX_PROGRAM_ID);
@@ -138,7 +139,7 @@ function adapterToAnchorWallet(adapter: Adapter) {
 }
 
 export function buildConnection(): Connection {
-	return new Connection(SOLANA_RPC, 'confirmed');
+	return patchConnection(new Connection(SOLANA_RPC, 'confirmed'));
 }
 
 export function buildProgram(connection: Connection, adapter: Adapter): any {

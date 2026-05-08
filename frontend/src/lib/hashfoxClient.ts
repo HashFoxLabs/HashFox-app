@@ -7,6 +7,7 @@ import {
 import { AnchorProvider, BN, Program, type Idl } from '$lib/vendor/anchor';
 import type { Adapter, SignerWalletAdapter } from '@solana/wallet-adapter-base';
 import { SOLANA_RPC, MAGICBLOCK_RPC, HASHFOX_PROGRAM_ID } from '$lib/env';
+import { patchConnection } from '$lib/solana/connection';
 import hashfoxIdl from '$lib/idl/hashfox.json';
 import { sessionKeyManager } from '$lib/solana/session-keys';
 import {
@@ -65,8 +66,8 @@ class HashfoxClient {
 	private program: any | null = null;
 
 	constructor() {
-		this.connection = new Connection(MAGICBLOCK_RPC, 'confirmed');
-		this.solanaConnection = new Connection(SOLANA_RPC, 'confirmed');
+		this.connection = patchConnection(new Connection(MAGICBLOCK_RPC, 'confirmed'));
+		this.solanaConnection = patchConnection(new Connection(SOLANA_RPC, 'confirmed'));
 	}
 
 	setConnectedWallet(wallet: Adapter | null) {

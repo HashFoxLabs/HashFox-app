@@ -8,6 +8,7 @@
 	import { Connection, Keypair } from '@solana/web3.js';
 	import { AnchorProvider, Program, type Idl } from '$lib/vendor/anchor';
 	import { SOLANA_RPC } from '$lib/env';
+	import { patchConnection } from '$lib/solana/connection';
 	import hashfoxIdl from '$lib/idl/hashfox.json';
 	import {
 		fetchAllCompetitions,
@@ -15,7 +16,6 @@
 		fetchCompetitionParticipants,
 		createCompetition,
 		joinCompetition,
-		reportScore,
 		settleCompetition,
 		claimCompetitionExit,
 		isCompetitionJoinable,
@@ -137,7 +137,7 @@
 	/** Build a program tied to a throw-away keypair so the listing/podium fetch
 	 * works before the user connects a wallet. Read-only — never signs. */
 	function buildReadOnlyProgram(): any {
-		const conn = new Connection(SOLANA_RPC, 'confirmed');
+		const conn = patchConnection(new Connection(SOLANA_RPC, 'confirmed'));
 		const dummy = Keypair.generate();
 		const wallet = {
 			publicKey: dummy.publicKey,
@@ -392,36 +392,6 @@
 		}
 	}
 
-	async function handleReportTop3(c: CompetitionView) {
-		// Permissionlessly push the current balances of the top participants
-		// into the on-chain leaderboard cache, so settle picks up real winners.
-		if (!wallet.connected || !wallet.publicKey) return;
-		const program = hashfoxClient.getProgram();
-		if (!program) return;
-		busy = true;
-		message = 'Refreshing leaderboard…';
-		try {
-			const sorted = [...participants].sort((a, b) => b.totalUsd - a.totalUsd).slice(0, 10);
-			for (const p of sorted) {
-				try {
-					await reportScore(
-						program,
-						wallet.publicKey,
-						new PublicKey(c.pubkey),
-						new PublicKey(p.owner)
-					);
-				} catch (err) {
-					console.warn('[reportScore] failed for', p.owner, err);
-				}
-			}
-			message = 'Leaderboard refreshed.';
-			await refresh();
-		} catch (err: any) {
-			message = err?.message ?? 'Refresh failed.';
-		} finally {
-			busy = false;
-		}
-	}
 
 	function validateCreateForm(): string | null {
 		const name = formName.trim();
@@ -864,9 +834,6 @@
 								{:else}
 									<button class="primary" disabled>CUP IS LIVE — JOINS CLOSED</button>
 								{/if}
-								<button class="secondary" disabled={busy} on:click={() => selected && handleReportTop3(selected)}>
-									REFRESH ON-CHAIN PODIUM
-								</button>
 								{#if canSettle}
 									<button class="secondary" disabled={busy} on:click={() => selected && handleSettle(selected)}>
 										SETTLE NOW

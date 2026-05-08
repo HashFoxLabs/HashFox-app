@@ -3,6 +3,7 @@ import { writable } from 'svelte/store';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import type { Adapter, WalletName, SignerWalletAdapter } from '@solana/wallet-adapter-base';
 import { MAGICBLOCK_RPC } from '$lib/env';
+import { patchConnection } from '$lib/solana/connection';
 import { fetchProfile } from '$lib/supabase';
 
 export const EMBEDDED_WALLET_NAME = 'Web3Auth';
@@ -62,7 +63,7 @@ class WalletManager {
 
 	constructor() {
 		const endpoint = MAGICBLOCK_RPC;
-		this.connection = new Connection(endpoint, 'confirmed');
+		this.connection = patchConnection(new Connection(endpoint, 'confirmed'));
 		connectionStore.set(this.connection);
 	}
 
