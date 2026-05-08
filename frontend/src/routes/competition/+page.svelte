@@ -32,7 +32,14 @@
 		activeCompetition,
 		refreshActiveCompetition
 	} from '$lib/stores/activeCompetition';
-	import { fetchPublicProfiles, type PublicProfile } from '$lib/supabase';
+	import {
+		fetchPublicProfiles,
+		fetchCompClosedTrades,
+		fetchCompUserStats,
+		type PublicProfile,
+		type CompClosedTrade,
+		type CompUserStats
+	} from '$lib/supabase';
 
 	type Filter = 'all' | 'pending' | 'active' | 'settled';
 
@@ -49,6 +56,10 @@
 	let participantsLoading = false;
 	let profiles: Map<string, PublicProfile> = new Map();
 	let participantsModalOpen = false;
+	let compTrades: CompClosedTrade[] = [];
+	let compStats: Map<string, CompUserStats> = new Map();
+	let compTradesLoading = false;
+	let tradesModalOpen = false;
 
 	// Create form state
 	let createOpen = false;
@@ -201,6 +212,64 @@
 	}
 
 	$: if (selected) loadParticipants();
+	$: if (selected) loadCompTrades(selected.pubkey);
+
+	async function loadCompTrades(pubkey: string) {
+		compTradesLoading = true;
+		try {
+			const [trades, stats] = await Promise.all([
+				fetchCompClosedTrades(pubkey, 200),
+				fetchCompUserStats(pubkey)
+			]);
+			compTrades = trades;
+			compStats = stats;
+		} catch (err) {
+			console.warn('[competition] comp trades load failed', err);
+		} finally {
+			compTradesLoading = false;
+		}
+	}
+
+	function fmtPnl(v: number): string {
+		if (!Number.isFinite(v)) return '$0';
+		const sign = v > 0 ? '+' : '';
+		return `${sign}${fmtUsd(v)}`;
+	}
+
+	function timeAgo(iso: string | null): string {
+		if (!iso) return '—';
+		const ms = Date.parse(iso);
+		if (Number.isNaN(ms)) return '—';
+		void now;
+		const diff = Math.max(0, Date.now() - ms);
+		const sec = Math.floor(diff / 1000);
+		if (sec < 60) return `${sec}s ago`;
+		const min = Math.floor(sec / 60);
+		if (min < 60) return `${min}m ago`;
+		const hr = Math.floor(min / 60);
+		if (hr < 24) return `${hr}h ago`;
+		const days = Math.floor(hr / 24);
+		return `${days}d ago`;
+	}
+
+	/** Live ranking enriched with realized PnL + #closed trades from Supabase.
+	 *  totalUsd = on-chain usd_balance (already includes locked margin AND
+	 *  realized PnL from closed positions, since the program credits/debits
+	 *  the balance on close). We sort by it and surface the Supabase-derived
+	 *  realized PnL as a separate "Cup PnL" stat for transparency. */
+	$: rankedParticipants = (() => {
+		return [...participants].map((p) => {
+			const stat = compStats.get(p.owner);
+			return {
+				...p,
+				realizedPnl: stat?.realizedPnl ?? 0,
+				closedTrades: stat?.tradeCount ?? 0,
+				wins: stat?.wins ?? 0,
+				losses: stat?.losses ?? 0,
+				winRate: stat?.winRate ?? 0
+			};
+		}).sort((a, b) => b.totalUsd - a.totalUsd);
+	})();
 
 	let lastWallet: string | null = null;
 	walletStore.subscribe(async (s) => {
@@ -226,6 +295,7 @@
 		await loadAll();
 		await refreshActiveCompetition();
 		await loadParticipants();
+		if (selected) await loadCompTrades(selected.pubkey);
 	}
 
 	async function handleJoin(c: CompetitionView) {
@@ -811,8 +881,15 @@
 							{#if participants.length === 0 && !participantsLoading}
 								<div class="placeholder small">No participants yet.</div>
 							{:else}
+								<div class="ranking-head">
+									<span>#</span>
+									<span>TRADER</span>
+									<span>BALANCE</span>
+									<span>CUP PNL</span>
+									<span>TRADES</span>
+								</div>
 								<div class="ranking">
-									{#each participants.slice(0, 10) as p, i (p.pubkey)}
+									{#each rankedParticipants.slice(0, 10) as p, i (p.pubkey)}
 										<a
 											class="rank-row"
 											class:me={wallet.publicKey && p.owner === wallet.publicKey.toBase58()}
@@ -830,10 +907,68 @@
 												</span>
 												<span class="rank-name">{displayName(p.owner)}</span>
 											</span>
-											<span class="rank-bal">{fmtUsd(p.totalUsd)}</span>
-											<span class="rank-locked">
-												{p.lockedUsd > 0 ? `· ${fmtUsd(p.lockedUsd)} locked` : ''}
+											<span class="rank-bal">
+												<strong>{fmtUsd(p.totalUsd)}</strong>
+												{#if p.lockedUsd > 0}
+													<small>· {fmtUsd(p.lockedUsd)} locked</small>
+												{/if}
 											</span>
+											<span class="rank-pnl" class:up={p.realizedPnl > 0} class:down={p.realizedPnl < 0}>
+												{p.closedTrades > 0 ? fmtPnl(p.realizedPnl) : '—'}
+											</span>
+											<span class="rank-trades">
+												{#if p.closedTrades > 0}
+													{p.closedTrades} · {(p.winRate * 100).toFixed(0)}% W
+												{:else}
+													—
+												{/if}
+											</span>
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+
+						<div class="comp-trades-block">
+							<div class="pb-head">
+								<strong>Recent trades</strong>
+								<span class="muted">
+									{compTradesLoading ? 'loading…' : `${compTrades.length} closed`}
+								</span>
+								{#if compTrades.length > 5}
+									<button class="ghost xs" on:click={() => (tradesModalOpen = true)}>
+										VIEW ALL ({compTrades.length})
+									</button>
+								{/if}
+							</div>
+							{#if compTrades.length === 0 && !compTradesLoading}
+								<div class="placeholder small">No closed trades in this cup yet.</div>
+							{:else}
+								<div class="trade-feed">
+									{#each compTrades.slice(0, 8) as t (t.position_key)}
+										{@const pnl = Number(t.realized_pnl ?? t.pnl ?? 0)}
+										<a class="trade-row" href={`/profile?address=${t.wallet_address}`} title={t.wallet_address}>
+											<span class="tr-trader">
+												<span class="tr-avatar">
+													{#if t.avatar_url}
+														<img src={t.avatar_url} alt="" />
+													{:else}
+														<span class="tr-fallback">{(t.username ?? t.wallet_address ?? '?')[0]?.toUpperCase()}</span>
+													{/if}
+												</span>
+												<span class="tr-name">
+													{t.username ? `@${t.username}` : shortAddr(t.wallet_address)}
+												</span>
+											</span>
+											<span class="tr-market">{t.market_title ?? t.market_id ?? '—'}</span>
+											<span class="tr-side {t.position_type ?? ''}">
+												{(t.position_type ?? '').toUpperCase()}
+												{#if t.trade_mode === 'perp' && t.leverage}
+													· {t.leverage}x
+												{/if}
+											</span>
+											<span class="tr-pnl" class:up={pnl > 0} class:down={pnl < 0}>{fmtPnl(pnl)}</span>
+											<span class="tr-time">{timeAgo(t.closed_at ?? t.opened_at)}</span>
 										</a>
 									{/each}
 								</div>
@@ -842,6 +977,67 @@
 					</div>
 				{/if}
 			</div>
+
+			{#if tradesModalOpen && selected}
+				<div
+					class="modal-backdrop"
+					role="presentation"
+					on:click={() => (tradesModalOpen = false)}
+					on:keydown={(e) => e.key === 'Escape' && (tradesModalOpen = false)}
+				>
+					<div
+						class="modal"
+						role="dialog"
+						aria-modal="true"
+						aria-label="Cup trades"
+						tabindex="-1"
+						on:click|stopPropagation
+						on:keydown|stopPropagation
+					>
+						<div class="modal-head">
+							<div>
+								<strong>Trades — {selected.name}</strong>
+								<span class="muted">{compTrades.length} closed</span>
+							</div>
+							<button class="ghost xs" on:click={() => (tradesModalOpen = false)}>CLOSE</button>
+						</div>
+						<div class="modal-body">
+							{#if compTrades.length === 0}
+								<div class="placeholder small">No trades yet.</div>
+							{:else}
+								<div class="trade-feed">
+									{#each compTrades as t (t.position_key)}
+										{@const pnl = Number(t.realized_pnl ?? t.pnl ?? 0)}
+										<a class="trade-row" href={`/profile?address=${t.wallet_address}`} title={t.wallet_address}>
+											<span class="tr-trader">
+												<span class="tr-avatar">
+													{#if t.avatar_url}
+														<img src={t.avatar_url} alt="" />
+													{:else}
+														<span class="tr-fallback">{(t.username ?? t.wallet_address ?? '?')[0]?.toUpperCase()}</span>
+													{/if}
+												</span>
+												<span class="tr-name">
+													{t.username ? `@${t.username}` : shortAddr(t.wallet_address)}
+												</span>
+											</span>
+											<span class="tr-market">{t.market_title ?? t.market_id ?? '—'}</span>
+											<span class="tr-side {t.position_type ?? ''}">
+												{(t.position_type ?? '').toUpperCase()}
+												{#if t.trade_mode === 'perp' && t.leverage}
+													· {t.leverage}x
+												{/if}
+											</span>
+											<span class="tr-pnl" class:up={pnl > 0} class:down={pnl < 0}>{fmtPnl(pnl)}</span>
+											<span class="tr-time">{timeAgo(t.closed_at ?? t.opened_at)}</span>
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			{#if participantsModalOpen && selected}
 				<div
@@ -870,8 +1066,15 @@
 							{#if participants.length === 0}
 								<div class="placeholder small">No participants yet.</div>
 							{:else}
+								<div class="ranking-head">
+									<span>#</span>
+									<span>TRADER</span>
+									<span>BALANCE</span>
+									<span>CUP PNL</span>
+									<span>TRADES</span>
+								</div>
 								<div class="ranking modal-ranking">
-									{#each participants as p, i (p.pubkey)}
+									{#each rankedParticipants as p, i (p.pubkey)}
 										<a
 											class="rank-row"
 											class:me={wallet.publicKey && p.owner === wallet.publicKey.toBase58()}
@@ -889,9 +1092,21 @@
 												</span>
 												<span class="rank-name">{displayName(p.owner)}</span>
 											</span>
-											<span class="rank-bal">{fmtUsd(p.totalUsd)}</span>
-											<span class="rank-locked">
-												{p.lockedUsd > 0 ? `· ${fmtUsd(p.lockedUsd)} locked` : ''}
+											<span class="rank-bal">
+												<strong>{fmtUsd(p.totalUsd)}</strong>
+												{#if p.lockedUsd > 0}
+													<small>· {fmtUsd(p.lockedUsd)} locked</small>
+												{/if}
+											</span>
+											<span class="rank-pnl" class:up={p.realizedPnl > 0} class:down={p.realizedPnl < 0}>
+												{p.closedTrades > 0 ? fmtPnl(p.realizedPnl) : '—'}
+											</span>
+											<span class="rank-trades">
+												{#if p.closedTrades > 0}
+													{p.closedTrades} · {(p.winRate * 100).toFixed(0)}% W
+												{:else}
+													—
+												{/if}
 											</span>
 										</a>
 									{/each}
@@ -1236,13 +1451,76 @@
 	.placeholder.small { padding: 14px; font-size: 11px; }
 
 	.participants-block { display: flex; flex-direction: column; gap: 8px; }
+	.comp-trades-block { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+
+	.ranking-head {
+		display: grid;
+		grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+		gap: 8px;
+		padding: 6px 10px;
+		font-family: 'Courier New', monospace;
+		font-size: 9px; font-weight: 900; letter-spacing: 0.16em;
+		color: #777;
+		border-bottom: 1px solid #1a1a1a;
+	}
+	.ranking-head span:nth-child(3),
+	.ranking-head span:nth-child(4),
+	.ranking-head span:nth-child(5) { text-align: right; }
+
+	.rank-pnl { font-family: 'Courier New', monospace; font-weight: 900; text-align: right; color: #888; }
+	.rank-pnl.up { color: #00ff66; }
+	.rank-pnl.down { color: #ff4d4d; }
+	.rank-trades { font-family: 'Courier New', monospace; color: #888; text-align: right; font-size: 11px; }
+	.rank-bal { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+	.rank-bal strong { color: #00ff66; font-weight: 900; }
+	.rank-bal small { color: #777; font-size: 9px; }
+
+	.trade-feed { display: flex; flex-direction: column; }
+	.trade-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 0.6fr);
+		gap: 8px;
+		padding: 8px 10px;
+		font-family: 'Courier New', monospace; font-size: 11px;
+		border-bottom: 1px solid #1a1a1a;
+		text-decoration: none; color: inherit;
+		align-items: center;
+		transition: background 0.12s;
+	}
+	.trade-row:hover { background: rgba(255, 90, 0, 0.04); }
+	.tr-trader { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+	.tr-avatar {
+		width: 22px; height: 22px; border-radius: 50%; overflow: hidden;
+		background: #1a1a1a; flex-shrink: 0;
+		display: inline-flex; align-items: center; justify-content: center;
+		border: 1px solid #2a2a2a;
+	}
+	.tr-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+	.tr-fallback { color: #ff5a00; font-size: 11px; font-weight: 900; }
+	.tr-name { color: #ddd; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.tr-market { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.tr-side {
+		font-weight: 900; letter-spacing: 0.1em;
+		padding: 2px 6px; border-radius: 4px;
+		text-align: center; font-size: 10px;
+		background: rgba(255, 255, 255, 0.04); color: #aaa;
+		justify-self: start;
+	}
+	.tr-side.long { background: rgba(0, 255, 102, 0.10); color: #00ff66; }
+	.tr-side.short { background: rgba(255, 77, 77, 0.10); color: #ff4d4d; }
+	.tr-side.yes { background: rgba(0, 255, 102, 0.10); color: #00ff66; }
+	.tr-side.no { background: rgba(255, 77, 77, 0.10); color: #ff4d4d; }
+	.tr-pnl { font-weight: 900; text-align: right; color: #888; }
+	.tr-pnl.up { color: #00ff66; }
+	.tr-pnl.down { color: #ff4d4d; }
+	.tr-time { color: #666; text-align: right; font-size: 10px; }
 	.pb-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 	.pb-head strong { color: #fff; font-size: 13px; font-weight: 800; }
 	.pb-head .muted { color: #777; font-family: 'Courier New', monospace; font-size: 11px; }
 	.ranking { display: flex; flex-direction: column; }
 	.rank-row {
 		display: grid;
-		grid-template-columns: 50px minmax(0, 1fr) 110px 110px;
+		grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
 		gap: 8px;
 		padding: 8px 10px;
 		font-family: 'Courier New', monospace; font-size: 11px;
@@ -1370,7 +1648,12 @@
 		.cf-grid { grid-template-columns: 1fr; }
 		.how-grid { grid-template-columns: 1fr; }
 		.payout-grid { grid-template-columns: 1fr; }
-		.rank-row { grid-template-columns: 40px 1fr 90px; }
+		.rank-row { grid-template-columns: 32px 1fr 80px 70px; }
 		.rank-locked { display: none; }
+		.rank-trades { display: none; }
+		.ranking-head { grid-template-columns: 32px 1fr 80px 70px; }
+		.ranking-head span:nth-child(5) { display: none; }
+		.trade-row { grid-template-columns: 1fr 1fr 60px 70px; }
+		.tr-time { display: none; }
 	}
 </style>

@@ -215,6 +215,8 @@ export interface ClosedTradeUpsertInput {
 	closePrice?: number | null;
 	closedAtIso?: string | null;
 	realizedPnl?: number | null;
+	competitionPubkey?: string | null;
+	competitionName?: string | null;
 }
 
 export async function upsertClosedTrade(
@@ -250,7 +252,9 @@ export async function upsertClosedTrade(
 		liquidation_price: input.liquidationPrice ?? null,
 		close_price: input.closePrice ?? null,
 		closed_at: input.closedAtIso ?? null,
-		realized_pnl: input.realizedPnl ?? null
+		realized_pnl: input.realizedPnl ?? null,
+		competition_pubkey: input.competitionPubkey ?? null,
+		competition_name: input.competitionName ?? null
 	};
 	if (input.analysis !== undefined) row.analysis = input.analysis;
 
@@ -339,6 +343,124 @@ export async function markTradePosted(
 		return { ok: false, error: 'Trade row not found for current user/position key' };
 	}
 	return { ok: true };
+}
+
+export interface CompClosedTrade {
+	position_key: string;
+	wallet_address: string;
+	username: string | null;
+	avatar_url: string | null;
+	source: string | null;
+	position_type: string | null;
+	market_id: string | null;
+	market_title: string | null;
+	pair_index: number | null;
+	trade_mode: string | null;
+	leverage: number | null;
+	margin_usd: number | null;
+	amount: number | null;
+	entry_price: number | null;
+	close_price: number | null;
+	realized_pnl: number | null;
+	pnl: number | null;
+	status: string | null;
+	opened_at: string | null;
+	closed_at: string | null;
+}
+
+/** Fetch every closed trade tagged for a given competition, joined with the
+ * trader's public profile so the comp page can render usernames/avatars
+ * without a second round-trip. Newest closes first. */
+export async function fetchCompClosedTrades(
+	competitionPubkey: string,
+	limit = 200
+): Promise<CompClosedTrade[]> {
+	const sb = getSupabase();
+	if (!sb) return [];
+	const { data, error } = await sb
+		.from('trades')
+		.select(
+			'position_key, source, position_type, market_id, market_title, pair_index, trade_mode, leverage, margin_usd, amount, entry_price, close_price, realized_pnl, pnl, status, opened_at, closed_at, users!inner(wallet_address, username, avatar_url)'
+		)
+		.eq('competition_pubkey', competitionPubkey)
+		.order('closed_at', { ascending: false, nullsFirst: false })
+		.limit(limit);
+	if (error) {
+		console.warn('[supabase] comp trades fetch error', error.message);
+		return [];
+	}
+	return ((data as any[]) ?? []).map((row) => ({
+		position_key: row.position_key,
+		wallet_address: row.users?.wallet_address ?? '',
+		username: row.users?.username ?? null,
+		avatar_url: row.users?.avatar_url ?? null,
+		source: row.source ?? null,
+		position_type: row.position_type ?? null,
+		market_id: row.market_id ?? null,
+		market_title: row.market_title ?? null,
+		pair_index: row.pair_index ?? null,
+		trade_mode: row.trade_mode ?? null,
+		leverage: row.leverage ?? null,
+		margin_usd: row.margin_usd ?? null,
+		amount: row.amount ?? null,
+		entry_price: row.entry_price ?? null,
+		close_price: row.close_price ?? null,
+		realized_pnl: row.realized_pnl ?? null,
+		pnl: row.pnl ?? null,
+		status: row.status ?? null,
+		opened_at: row.opened_at ?? null,
+		closed_at: row.closed_at ?? null
+	})) as CompClosedTrade[];
+}
+
+export interface CompUserStats {
+	wallet_address: string;
+	tradeCount: number;
+	wins: number;
+	losses: number;
+	realizedPnl: number;
+	winRate: number;
+}
+
+/** Aggregate every closed comp trade into per-trader stats — count, wins,
+ * losses, realized PnL, win rate. Done client-side after fetching all rows
+ * because PostgREST can't do GROUP BY without a view. */
+export async function fetchCompUserStats(
+	competitionPubkey: string
+): Promise<Map<string, CompUserStats>> {
+	const out = new Map<string, CompUserStats>();
+	const sb = getSupabase();
+	if (!sb) return out;
+	const { data, error } = await sb
+		.from('trades')
+		.select('realized_pnl, pnl, users!inner(wallet_address)')
+		.eq('competition_pubkey', competitionPubkey);
+	if (error) {
+		console.warn('[supabase] comp stats fetch error', error.message);
+		return out;
+	}
+	for (const row of (data as any[]) ?? []) {
+		const wallet: string = row.users?.wallet_address ?? '';
+		if (!wallet) continue;
+		const pnl = Number(row.realized_pnl ?? row.pnl ?? 0);
+		const cur = out.get(wallet) ?? {
+			wallet_address: wallet,
+			tradeCount: 0,
+			wins: 0,
+			losses: 0,
+			realizedPnl: 0,
+			winRate: 0
+		};
+		cur.tradeCount += 1;
+		cur.realizedPnl += pnl;
+		if (pnl > 0) cur.wins += 1;
+		else if (pnl < 0) cur.losses += 1;
+		out.set(wallet, cur);
+	}
+	for (const v of out.values()) {
+		v.winRate = v.tradeCount > 0 ? v.wins / v.tradeCount : 0;
+	}
+	return out;
 }
 
 export interface PostedStrategy {

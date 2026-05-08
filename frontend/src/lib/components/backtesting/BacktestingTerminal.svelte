@@ -122,50 +122,63 @@
 		progressMessage = 'Sending backtest request...';
 		startElapsedTimer();
 
+		const POLL_INTERVAL_MS = 1000;
+		const MAX_POLL_ATTEMPTS = 300; // 5 minutes max
+
 		try {
-			const response = await fetch('/api/backtest/run', {
+			progress = 5;
+			progressMessage = 'Submitting backtest job...';
+
+			const submitRes = await fetch('/api/backtest/run', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ ...payload, backtest_type: backtestType ?? 'highfrequency' })
 			});
 
-			if (!response.ok || !response.body) {
-				const errData = await response.json().catch(() => ({}));
-				throw new Error((errData as { error?: string }).error || `HTTP ${response.status}`);
+			if (!submitRes.ok) {
+				const errData = await submitRes.json().catch(() => ({}));
+				throw new Error((errData as { error?: string }).error || `HTTP ${submitRes.status}`);
 			}
 
-			const reader = response.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = '';
+			const { job_id } = (await submitRes.json()) as { job_id: string };
+			if (!job_id) throw new Error('Engine did not return a job_id.');
+
+			progress = 15;
+			progressMessage = 'Job queued, waiting for engine...';
+
 			let resultReceived = false;
+			for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+				await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
-			outer: while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split('\n');
-				buffer = lines.pop()!;
+				const pollRes = await fetch(`/api/backtest/status/${encodeURIComponent(job_id)}`);
+				if (!pollRes.ok) {
+					const errData = await pollRes.json().catch(() => ({}));
+					throw new Error((errData as { error?: string }).error || `Poll error (${pollRes.status})`);
+				}
 
-				for (const line of lines) {
-					if (!line.trim()) continue;
-					const msg = JSON.parse(line);
-					if (msg.type === 'progress') {
-						progress = msg.progress ?? progress;
-						progressMessage = msg.message ?? progressMessage;
-					} else if (msg.type === 'result') {
-						backtestResult = msg.data as EngineResult;
-						progress = 100;
-						resultReceived = true;
-						break outer;
-					} else if (msg.type === 'error') {
-						throw new Error(msg.error);
-					}
+				const result = await pollRes.json();
+
+				if (result.status === 'pending' || result.status === 'running') {
+					progress = 15 + Math.min(70, attempt * 2);
+					progressMessage = 'Running backtest...';
+					continue;
+				}
+
+				if (result.status === 'failed') {
+					throw new Error(result.error ?? 'Backtest failed');
+				}
+
+				if (result.status === 'done') {
+					progress = 95;
+					progressMessage = 'Finalizing results...';
+					backtestResult = result as EngineResult;
+					progress = 100;
+					resultReceived = true;
+					break;
 				}
 			}
 
-			reader.cancel().catch(() => {});
-
-			if (!resultReceived || !backtestResult) throw new Error('No result received from backtest engine.');
+			if (!resultReceived || !backtestResult) throw new Error('Backtest timed out after 5 minutes.');
 			step = 'results';
 		} catch (err: unknown) {
 			error = err instanceof Error ? err.message : String(err);

@@ -564,10 +564,22 @@ export async function fetchAllTradingPositions(
 	}
 	// Anchor's `.all()` returns `{publicKey, account}` — normalize to `pubkey`
 	// to match the counter path so downstream consumers work uniformly.
+	// Filter out comp positions: TradingPosition.owner stores the wallet
+	// for both regular and comp trades, so a memcmp on owner alone returns
+	// both. Comp positions are seeded by the per-cup comp_user PDA, so their
+	// derived PDA won't match findTradePda(mainUserPda, positionId).
 	const all = await (program.account as any).tradingPosition.all([
 		{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 	]);
-	return all.map((a: any) => ({ pubkey: a.publicKey ?? a.pubkey, account: a.account }));
+	const out: Array<{ pubkey: PublicKey; account: TradingPositionAccount }> = [];
+	for (const a of all) {
+		const pubkey: PublicKey = a.publicKey ?? a.pubkey;
+		const acc = a.account as TradingPositionAccount;
+		const [expected] = findTradePda(userPda, acc.positionId as BNType);
+		if (!pubkey.equals(expected)) continue;
+		out.push({ pubkey, account: acc });
+	}
+	return out;
 }
 
 export async function fetchAllPredictionPositions(
@@ -589,10 +601,20 @@ export async function fetchAllPredictionPositions(
 	} catch {
 		/* fall through to getProgramAccounts */
 	}
+	// Same comp-position guard as the trading variant: PredictionPosition.owner
+	// stores the wallet for both modes, so we have to PDA-check each result.
 	const all = await (program.account as any).predictionPosition.all([
 		{ memcmp: { offset: 8, bytes: owner.toBase58() } }
 	]);
-	return all.map((a: any) => ({ pubkey: a.publicKey ?? a.pubkey, account: a.account }));
+	const out: Array<{ pubkey: PublicKey; account: PredictionPositionAccount }> = [];
+	for (const a of all) {
+		const pubkey: PublicKey = a.publicKey ?? a.pubkey;
+		const acc = a.account as PredictionPositionAccount;
+		const [expected] = findPredPda(userPda, acc.positionId as BNType);
+		if (!pubkey.equals(expected)) continue;
+		out.push({ pubkey, account: acc });
+	}
+	return out;
 }
 
 export interface UnifiedHistoryEntry {

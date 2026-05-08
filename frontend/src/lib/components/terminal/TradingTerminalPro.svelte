@@ -597,6 +597,10 @@
 			if (accountInitialized) {
 				// Tournament-mode account state lives on the per-comp UserAccount
 				// PDA, so swap the balance + positions source when we're in a cup.
+				// Track which source we ended up using so we tag the Supabase
+				// sync correctly — falling back to the main account on a comp
+				// fetch failure must NOT tag those main trades as comp trades.
+				let positionsAreComp = false;
 				if (comp?.pubkey && comp.view) {
 					try {
 						const [{ findCompUserPda, fetchCompTradingPositions }, { USD_SCALE }] =
@@ -614,21 +618,27 @@
 							};
 							setUserBalance(balance);
 							positions = await fetchCompTradingPositions(program, comp.pubkey, wallet.publicKey);
+							positionsAreComp = true;
 						}
 					} catch (err) {
 						console.warn('[terminal] comp balance load failed', err);
 						balance = await hashfoxClient.getBalanceBreakdown();
 						setUserBalance(balance);
 						positions = await hashfoxClient.fetchTradingPositions();
+						positionsAreComp = false;
 					}
 				} else {
 					balance = await hashfoxClient.getBalanceBreakdown();
 					setUserBalance(balance);
 					positions = await hashfoxClient.fetchTradingPositions();
+					positionsAreComp = false;
 				}
 				const addr = wallet.publicKey?.toBase58?.();
 				if (addr && positions.length > 0) {
-					void syncClosedTradingPositions(addr, positions);
+					const compCtx = positionsAreComp && comp?.pubkey && comp.view
+						? { pubkey: comp.pubkey.toBase58(), name: comp.view.name }
+						: null;
+					void syncClosedTradingPositions(addr, positions, compCtx);
 				}
 			} else {
 				balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };

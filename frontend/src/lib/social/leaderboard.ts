@@ -49,6 +49,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
 		const { data, error } = await sb
 			.from('trades')
 			.select('user_id, pnl, amount, margin_usd, created_at, status')
+			.is('competition_pubkey', null)
 			.range(offset, offset + PAGE_SIZE - 1);
 		if (error) {
 			console.warn('[leaderboard] trades fetch error', error.message);

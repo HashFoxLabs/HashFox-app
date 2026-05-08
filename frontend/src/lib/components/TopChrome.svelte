@@ -5,7 +5,12 @@
 	import WalletButton from '$lib/wallet/WalletButton.svelte';
 	import CreateUsernameModal from '$lib/profile/CreateUsernameModal.svelte';
 	import { walletStore, setWalletUsername } from '$lib/wallet/stores';
-	import { refreshActiveCompetition, clearActiveCompetition } from '$lib/stores/activeCompetition';
+	import {
+		activeCompetition,
+		refreshActiveCompetition,
+		clearActiveCompetition
+	} from '$lib/stores/activeCompetition';
+	import { findCompUserPda } from '$lib/competition';
 	import { selectedMarket } from '$lib/stores/selectedMarket';
 	import {
 		pythPrices,
@@ -77,6 +82,18 @@
 	let initializeLoading = false;
 	let statusPoll: ReturnType<typeof setInterval> | null = null;
 
+	let activeComp: { pubkey: any; view: any; loaded: boolean } = {
+		pubkey: null,
+		view: null,
+		loaded: false
+	};
+	activeCompetition.subscribe((s) => {
+		activeComp = s;
+		// Re-pull the balance when comp state flips so the navbar instantly
+		// switches between main and per-cup balances on join/claim/settle.
+		if (connectedWallet?.connected && accountInitialized) void refreshStatus();
+	});
+
 	walletStore.subscribe((w) => {
 		const wasConnected = connectedWallet?.connected;
 		connectedWallet = w;
@@ -139,9 +156,31 @@
 			walletBalanceSol = await hashfoxClient.getBalance();
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
-				// Push to the shared store so the navbar updates instantly when a
-				// trade panel triggers a refresh too.
-				setUserBalance(await hashfoxClient.getBalanceBreakdown());
+				// When the user is inside a tournament, the source of truth for
+				// "balance" is the per-cup UserAccount PDA — the main account
+				// stays at its pre-join state until claim_exit. Route through
+				// that PDA here so the navbar matches what TradingTerminalPro
+				// renders and no longer flickers between the two.
+				const compPubkey = activeComp?.pubkey;
+				if (compPubkey && connectedWallet.publicKey) {
+					try {
+						const program = hashfoxClient.getProgram();
+						const [compUserPda] = findCompUserPda(compPubkey, connectedWallet.publicKey);
+						const compAcc = await (program?.account as any).userAccount.fetch(compUserPda);
+						const total = Number(compAcc.usdBalance.toString()) / USD_SCALE;
+						const locked = Number(compAcc.lockedMarginUsd.toString()) / USD_SCALE;
+						setUserBalance({
+							totalUsd: total,
+							lockedUsd: locked,
+							availableUsd: Math.max(0, total - locked)
+						});
+					} catch (err) {
+						console.warn('[topchrome] comp balance fetch failed', err);
+						setUserBalance(await hashfoxClient.getBalanceBreakdown());
+					}
+				} else {
+					setUserBalance(await hashfoxClient.getBalanceBreakdown());
+				}
 				// Pick up tournament mode (or its absence) so trade panels know
 				// whether to route through comp_* instructions.
 				void refreshActiveCompetition();

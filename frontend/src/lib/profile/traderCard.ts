@@ -59,6 +59,7 @@ export async function fetchTraderCardStats(
 			.from('trades')
 			.select('pnl, amount, opened_at, created_at, closed_at, status')
 			.eq('user_id', userId)
+			.is('competition_pubkey', null)
 			.range(offset, offset + PAGE_SIZE - 1);
 		if (error) {
 			console.warn('[traderCard] trades fetch error', error.message);

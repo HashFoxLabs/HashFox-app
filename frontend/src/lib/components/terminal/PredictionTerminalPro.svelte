@@ -206,8 +206,37 @@
 			solBalance = await hashfoxClient.getBalance();
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
-				balance = await hashfoxClient.getBalanceBreakdown();
-				setUserBalance(balance);
+				// In tournament mode the live balance lives on the per-cup
+				// UserAccount PDA. Mirror what TradingTerminalPro does so the
+				// prediction tab stays consistent with the navbar.
+				if (comp?.pubkey && comp.view) {
+					try {
+						const [{ findCompUserPda }, { USD_SCALE }] = await Promise.all([
+							import('$lib/competition'),
+							import('$lib/hashfox')
+						]);
+						const program = hashfoxClient.getProgram();
+						if (program) {
+							const [compUserPda] = findCompUserPda(comp.pubkey, wallet.publicKey);
+							const compAcc = await (program.account as any).userAccount.fetch(compUserPda);
+							const total = Number(compAcc.usdBalance.toString()) / USD_SCALE;
+							const locked = Number(compAcc.lockedMarginUsd.toString()) / USD_SCALE;
+							balance = {
+								totalUsd: total,
+								lockedUsd: locked,
+								availableUsd: Math.max(0, total - locked)
+							};
+							setUserBalance(balance);
+						}
+					} catch (err) {
+						console.warn('[prediction] comp balance load failed', err);
+						balance = await hashfoxClient.getBalanceBreakdown();
+						setUserBalance(balance);
+					}
+				} else {
+					balance = await hashfoxClient.getBalanceBreakdown();
+					setUserBalance(balance);
+				}
 				await loadUserPositions();
 			} else {
 				balance = { totalUsd: 0, lockedUsd: 0, availableUsd: 0 };
