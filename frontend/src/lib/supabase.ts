@@ -258,7 +258,13 @@ export async function upsertClosedTrade(
 	};
 	if (input.analysis !== undefined) row.analysis = input.analysis;
 
-	const { error } = await sb.from('trades').upsert(row, { onConflict: 'position_key' });
+	// Conflict on (user_id, position_key) — never on position_key alone — so a
+	// colliding key from a different wallet can never overwrite this user's
+	// row. Combined with wallet-scoped position_keys (see syncClosedTrades.ts)
+	// this makes cross-user trade ownership corruption impossible.
+	const { error } = await sb
+		.from('trades')
+		.upsert(row, { onConflict: 'user_id,position_key' });
 	if (error) return { ok: false, error: error.message };
 	return { ok: true };
 }

@@ -621,11 +621,12 @@
 							positionsAreComp = true;
 						}
 					} catch (err) {
-						console.warn('[terminal] comp balance load failed', err);
-						balance = await hashfoxClient.getBalanceBreakdown();
-						setUserBalance(balance);
-						positions = await hashfoxClient.fetchTradingPositions();
-						positionsAreComp = false;
+						// Devnet 429 / transient RPC failure. DO NOT fall back to
+						// the main account — that's how comp users saw their
+						// regular balance flicker into the navbar. Keep the stale
+						// comp balance + positions; the next poll will refresh.
+						console.warn('[terminal] comp balance load failed (keeping stale)', err);
+						positionsAreComp = true;
 					}
 				} else {
 					balance = await hashfoxClient.getBalanceBreakdown();

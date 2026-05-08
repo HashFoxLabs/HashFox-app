@@ -218,12 +218,13 @@
 	}
 
 	function positionKeyForEntry(e: HistoryEntry): string {
+		const addr = walletAddress();
 		if (e.kind === 'trading') {
 			const t = e.data as TradingPositionAccount;
-			return tradingPositionKey(rawNum(t.positionId));
+			return tradingPositionKey(rawNum(t.positionId), addr);
 		}
 		const p = e.data as PredictionPositionAccount;
-		return predictionPositionKey(rawNum(p.positionId));
+		return predictionPositionKey(rawNum(p.positionId), addr);
 	}
 
 async function syncClosedTradesToSupabase(list: HistoryEntry[]) {

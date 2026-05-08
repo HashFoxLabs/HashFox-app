@@ -81,6 +81,51 @@
 		}
 	}
 
+	function isCryptoMarket(sym: string): boolean {
+		const m = findMarket(sym);
+		return !m || m.sub === 'crypto';
+	}
+
+	/** Binance kline interval codes for our app's intervals. */
+	const BINANCE_IV: Record<string, string> = {
+		'1m': '1m',
+		'5m': '5m',
+		'15m': '15m',
+		'1h': '1h',
+		'4h': '4h',
+		'1d': '1d'
+	};
+
+	async function fetchCandlesBinance(
+		sym: string,
+		iv: string
+	): Promise<CandlestickData<Time>[]> {
+		const ivCode = BINANCE_IV[iv] ?? '1m';
+		const limit = Math.min(1000, (DEFAULT_BARS[iv] ?? 200) * 2);
+		// Most of our crypto markets are quoted in USD on the program but
+		// Binance lists them as USDT pairs. Same number to within a few bps.
+		const pair = `${sym}USDT`;
+		const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(
+			pair
+		)}&interval=${ivCode}&limit=${limit}`;
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`Binance ${response.status}`);
+		const rows = (await response.json()) as Array<
+			[number, string, string, string, string, ...unknown[]]
+		>;
+		const out: CandlestickData<Time>[] = [];
+		for (const r of rows) {
+			out.push({
+				time: Math.floor(r[0] / 1000) as Time,
+				open: Number(r[1]),
+				high: Number(r[2]),
+				low: Number(r[3]),
+				close: Number(r[4])
+			});
+		}
+		return out;
+	}
+
 	function priceFormatFor(sym: string): Partial<CandlestickSeriesOptions>['priceFormat'] {
 		const m = findMarket(sym);
 		const decimals = m?.decimals ?? 4;
@@ -93,7 +138,10 @@
 		return m?.quote ?? 'USD';
 	}
 
-	async function fetchCandles(sym: string, iv: string): Promise<CandlestickData<Time>[]> {
+	async function fetchCandlesPyth(
+		sym: string,
+		iv: string
+	): Promise<CandlestickData<Time>[]> {
 		const pythSym = pythBenchmarksSymbol(sym);
 		if (!pythSym) throw new Error(`No Pyth symbol for ${sym}`);
 		const res = PYTH_RES[iv] ?? '15';
@@ -105,7 +153,16 @@
 		const url = `https://benchmarks.pyth.network/v1/shims/tradingview/history?symbol=${encodeURIComponent(
 			pythSym
 		)}&resolution=${res}&from=${from}&to=${now}`;
-		const response = await fetch(url);
+		// Don't let a Pyth outage hang the chart for 30s. AbortController +
+		// 6s budget gives the fallback a chance to take over quickly.
+		const ctrl = new AbortController();
+		const timer = setTimeout(() => ctrl.abort(), 6_000);
+		let response: Response;
+		try {
+			response = await fetch(url, { signal: ctrl.signal });
+		} finally {
+			clearTimeout(timer);
+		}
 		if (!response.ok) throw new Error(`Pyth Benchmarks ${response.status}`);
 		const data = (await response.json()) as {
 			s: string;
@@ -116,7 +173,7 @@
 			c?: number[];
 		};
 		if (data.s !== 'ok' || !data.t || !data.o || !data.h || !data.l || !data.c) {
-			return [];
+			throw new Error(`Pyth Benchmarks status=${data.s}`);
 		}
 		const out: CandlestickData<Time>[] = [];
 		for (let i = 0; i < data.t.length; i++) {
@@ -129,6 +186,25 @@
 			});
 		}
 		return out;
+	}
+
+	/** Try Pyth Benchmarks first; on failure for a crypto market, fall back
+	 *  to Binance klines. Pyth Benchmarks has had repeated outages — the
+	 *  fallback keeps the chart populated and the chart's live-tick layer
+	 *  (Hermes WS via pythPrices) is unaffected either way. */
+	async function fetchCandles(sym: string, iv: string): Promise<CandlestickData<Time>[]> {
+		try {
+			const out = await fetchCandlesPyth(sym, iv);
+			if (out.length > 0) return out;
+			throw new Error('Pyth returned 0 bars');
+		} catch (pythErr) {
+			if (!isCryptoMarket(sym)) throw pythErr;
+			console.warn(
+				`[PythChart] Pyth Benchmarks failed for ${sym} (${iv}); falling back to Binance`,
+				pythErr
+			);
+			return fetchCandlesBinance(sym, iv);
+		}
 	}
 
 	async function initChart(sym: string, iv: string) {

@@ -87,10 +87,16 @@
 		view: null,
 		loaded: false
 	};
+	// Re-pull the balance only when the cup *identity* changes (join / claim /
+	// settle), NOT on every store write. refreshStatus itself writes to this
+	// same store via refreshActiveCompetition, so naïvely subscribing here was
+	// creating an RPC-bound infinite loop.
+	let lastCompKey: string | null = null;
 	activeCompetition.subscribe((s) => {
 		activeComp = s;
-		// Re-pull the balance when comp state flips so the navbar instantly
-		// switches between main and per-cup balances on join/claim/settle.
+		const key = s.pubkey ? s.pubkey.toBase58() : null;
+		if (key === lastCompKey) return;
+		lastCompKey = key;
 		if (connectedWallet?.connected && accountInitialized) void refreshStatus();
 	});
 
@@ -175,8 +181,13 @@
 							availableUsd: Math.max(0, total - locked)
 						});
 					} catch (err) {
-						console.warn('[topchrome] comp balance fetch failed', err);
-						setUserBalance(await hashfoxClient.getBalanceBreakdown());
+						// Devnet RPC throttling (429) is the common cause here. We
+						// MUST NOT fall back to getBalanceBreakdown() — that's the
+						// main account, and writing it to the store while the user
+						// is inside a cup is exactly what produced the navbar
+						// flicker. Keep the stale comp balance; the next poll
+						// refreshes it.
+						console.warn('[topchrome] comp balance fetch failed (keeping stale)', err);
 					}
 				} else {
 					setUserBalance(await hashfoxClient.getBalanceBreakdown());

@@ -229,9 +229,10 @@
 							setUserBalance(balance);
 						}
 					} catch (err) {
-						console.warn('[prediction] comp balance load failed', err);
-						balance = await hashfoxClient.getBalanceBreakdown();
-						setUserBalance(balance);
+						// Same 429-resilient policy as the trading terminal:
+						// keep the stale comp balance rather than overwriting
+						// the navbar with the main account on RPC failure.
+						console.warn('[prediction] comp balance load failed (keeping stale)', err);
 					}
 				} else {
 					balance = await hashfoxClient.getBalanceBreakdown();

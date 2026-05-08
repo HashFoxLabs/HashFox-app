@@ -15,13 +15,26 @@ export interface CompTradeContext {
 	name: string;
 }
 
-export function tradingPositionKey(positionId: number, comp?: CompTradeContext | null): string {
-	if (comp?.pubkey) return `comp_trading:${comp.pubkey}:${positionId}`;
-	return `trading:${positionId}`;
+/** Wallet-scoped position keys.
+ *
+ *  History: keys used to be just `trading:<id>` / `comp_trading:<cup>:<id>`,
+ *  which collided across users (positionId is per-user, not global). Combined
+ *  with the upsert's onConflict=position_key, that meant any second user
+ *  reaching the same numeric id silently took ownership of the first user's
+ *  Supabase row. We saw this in the wild — comp trades flipping owner when
+ *  a different wallet connected to the app. Wallet-in-the-key makes the
+ *  collision impossible by construction. */
+export function tradingPositionKey(
+	positionId: number,
+	walletAddress: string,
+	comp?: CompTradeContext | null
+): string {
+	if (comp?.pubkey) return `comp_trading:${comp.pubkey}:${walletAddress}:${positionId}`;
+	return `trading:${walletAddress}:${positionId}`;
 }
 
-export function predictionPositionKey(positionId: number): string {
-	return `prediction:${positionId}`;
+export function predictionPositionKey(positionId: number, walletAddress: string): string {
+	return `prediction:${walletAddress}:${positionId}`;
 }
 
 /** Auto-save every closed trading position (perp + spot) to Supabase.
@@ -39,7 +52,7 @@ export async function syncClosedTradingPositions(
 
 	await Promise.all(
 		closed.map(async (p) => {
-			const positionKey = tradingPositionKey(p.positionId, comp);
+			const positionKey = tradingPositionKey(p.positionId, walletAddress, comp);
 			const source = p.marketCategory === 'crypto' ? 'blockberg' : 'traditional';
 			const res = await upsertClosedTrade(walletAddress, {
 				positionKey,
@@ -74,6 +87,6 @@ export async function syncClosedTradingPositions(
 
 	return fetchPostedStateByPositionKeys(
 		walletAddress,
-		closed.map((p) => tradingPositionKey(p.positionId, comp))
+		closed.map((p) => tradingPositionKey(p.positionId, walletAddress, comp))
 	);
 }
