@@ -1,5 +1,6 @@
 import { getSupabase } from '$lib/supabase';
 import { SOLANA_RPC } from '$lib/env';
+import { buildConnection } from '$lib/hashfox';
 import type { Adapter } from '@solana/wallet-adapter-base';
 import type { TraderCardStats } from './traderCard';
 import { formatPeriodLabel } from './traderCard';
@@ -192,11 +193,15 @@ export async function mintTraderCardNft(args: {
 		sellerFeeBasisPoints: umiCore.percentAmount(0)
 	});
 
-	const { signature } = await builder.sendAndConfirm(umi, {
-		confirm: { commitment: 'confirmed' }
-	});
-
+	// Umi's default RPC opens a WebSocket subscription for confirmation. Our
+	// production RPC sits behind a same-origin HTTP proxy that doesn't speak
+	// WS, so sendAndConfirm hangs and the blockhash expires. Split it: let
+	// Umi sign and submit, then confirm via the patched Connection that uses
+	// HTTP polling for `getSignatureStatuses`.
+	const signature = await builder.send(umi);
 	const sigStr = (umiCore as any).base58.deserialize(signature)[0] as string;
+	const conn = buildConnection();
+	await conn.confirmTransaction(sigStr, 'confirmed');
 
 	const result: MintResult = {
 		mintAddress: mintSigner.publicKey.toString(),
