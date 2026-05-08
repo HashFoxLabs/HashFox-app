@@ -21,15 +21,25 @@ const UPSTREAM =
 	env.PUBLIC_SOLANA_RPC ??
 	'https://api.devnet.solana.com';
 
-export const POST: RequestHandler = async ({ request, fetch }) => {
+export const POST: RequestHandler = async ({ request, fetch, url }) => {
 	const body = await request.text();
+
+	// Forward the browser's Origin (and Referer) to the upstream so RPC
+	// providers that gate by allowlisted origin (rpcfast, Helius, etc.) see
+	// the same value they would on a direct browser→provider call. Worker
+	// fetch() sends no Origin by default, which trips "Origin not allowed".
+	// Falls back to the deployed domain when the browser request lacks Origin
+	// (some user agents drop it on same-origin POSTs).
+	const forwardOrigin = request.headers.get('origin') ?? url.origin;
+	const headers: Record<string, string> = {
+		'content-type': 'application/json',
+		origin: forwardOrigin,
+		referer: request.headers.get('referer') ?? `${forwardOrigin}/`
+	};
+
 	let upstream: Response;
 	try {
-		upstream = await fetch(UPSTREAM, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body
-		});
+		upstream = await fetch(UPSTREAM, { method: 'POST', headers, body });
 	} catch (err) {
 		console.warn('[rpc-proxy] upstream fetch failed', err);
 		throw error(502, 'Upstream RPC unreachable');

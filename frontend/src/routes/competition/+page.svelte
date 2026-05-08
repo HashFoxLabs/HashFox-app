@@ -82,9 +82,25 @@
 	const tick = setInterval(() => (now = Date.now()), 1000);
 	onDestroy(() => clearInterval(tick));
 
+	/** Dedupe by a string key, keeping the first occurrence. Defensive guard
+	 *  for keyed {#each} blocks — Svelte throws each_key_duplicate on dupes,
+	 *  and devnet getProgramAccounts has been seen to occasionally return
+	 *  the same record twice under retry. */
+	function uniqueBy<T>(rows: T[], keyOf: (r: T) => string): T[] {
+		const seen = new Set<string>();
+		const out: T[] = [];
+		for (const r of rows) {
+			const k = keyOf(r);
+			if (seen.has(k)) continue;
+			seen.add(k);
+			out.push(r);
+		}
+		return out;
+	}
+
 	$: filtered = (() => {
-		if (filter === 'all') return comps;
-		return comps.filter((c) => c.status === filter);
+		const base = filter === 'all' ? comps : comps.filter((c) => c.status === filter);
+		return uniqueBy(base, (c) => c.pubkey);
 	})();
 
 	$: selected = filtered.find((c) => c.pubkey === selectedKey)
@@ -221,7 +237,7 @@
 				fetchCompClosedTrades(pubkey, 200),
 				fetchCompUserStats(pubkey)
 			]);
-			compTrades = trades;
+			compTrades = uniqueBy(trades, (t) => t.position_key);
 			compStats = stats;
 		} catch (err) {
 			console.warn('[competition] comp trades load failed', err);
@@ -258,7 +274,7 @@
 	 *  the balance on close). We sort by it and surface the Supabase-derived
 	 *  realized PnL as a separate "Cup PnL" stat for transparency. */
 	$: rankedParticipants = (() => {
-		return [...participants].map((p) => {
+		const enriched = uniqueBy(participants, (p) => p.pubkey).map((p) => {
 			const stat = compStats.get(p.owner);
 			return {
 				...p,
@@ -268,7 +284,8 @@
 				losses: stat?.losses ?? 0,
 				winRate: stat?.winRate ?? 0
 			};
-		}).sort((a, b) => b.totalUsd - a.totalUsd);
+		});
+		return enriched.sort((a, b) => b.totalUsd - a.totalUsd);
 	})();
 
 	let lastWallet: string | null = null;
