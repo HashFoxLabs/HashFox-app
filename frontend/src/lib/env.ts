@@ -4,7 +4,20 @@ export const SUPABASE_URL = env.PUBLIC_SUPABASE_URL || '';
 export const SUPABASE_ANON_KEY = env.PUBLIC_SUPABASE_ANON_KEY || '';
 
 export const MAGICBLOCK_RPC = env.PUBLIC_MAGICBLOCK_RPC || 'https://rpc.magicblock.app/devnet/';
-export const SOLANA_RPC = env.PUBLIC_SOLANA_RPC || env.PUBLIC_MAGICBLOCK_RPC || 'https://api.devnet.solana.com';
+
+/** Resolve a same-origin RPC path (e.g. `/api/rpc`) to an absolute URL.
+ *  `new Connection(...)` from @solana/web3.js calls `new URL(endpoint)` in
+ *  its constructor, which throws on relative URLs. We prepend the current
+ *  origin in the browser; on the server (SSR/build) we fall back to a local
+ *  absolute that's never actually called. */
+function resolveRpcUrl(url: string): string {
+	if (!url.startsWith('/')) return url;
+	if (typeof window !== 'undefined') return window.location.origin + url;
+	return 'http://localhost:5173' + url;
+}
+const rawSolanaRpc =
+	env.PUBLIC_SOLANA_RPC || env.PUBLIC_MAGICBLOCK_RPC || 'https://api.devnet.solana.com';
+export const SOLANA_RPC = resolveRpcUrl(rawSolanaRpc);
 
 export const HERMES_URL = env.PUBLIC_HERMES_URL || 'https://hermes.pyth.network';
 export const PYTH_API_KEY = env.PUBLIC_PYTH_API_KEY || '';

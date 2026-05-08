@@ -18,7 +18,8 @@ directory = ".svelte-kit/cloudflare"
 # (`wrangler secret put NAME`) later if you want to remove it from the repo.
 [vars]
 PUBLIC_HASHFOX_PROGRAM_ID = "7ApsvRSqfqCA5YbSSvAmeboFFU7hyB2HJBCpEiwmLSSi"
-PUBLIC_SOLANA_RPC = "https://sol-devnet-rpc.rpcfast.com?api_key=FYGvAmWoD8S93aMN4AXeFctgvRtIVWC7jZjFNzPwQnXZWXeqGberhb1wF7dleoBV"
+PUBLIC_SOLANA_RPC = "/api/rpc"
+SOLANA_RPC_UPSTREAM = "https://sol-devnet-rpc.rpcfast.com?api_key=FYGvAmWoD8S93aMN4AXeFctgvRtIVWC7jZjFNzPwQnXZWXeqGberhb1wF7dleoBV"
 PUBLIC_MAGICBLOCK_RPC = "https://rpc.magicblock.app/devnet/"
 PUBLIC_HERMES_URL = "https://hermes.pyth.network"
 PUBLIC_PYTH_API_KEY = "EA7FQ1WkaQuM38PJE26TZXpD6fjwmKrVGBo7pX2chFVZ"
