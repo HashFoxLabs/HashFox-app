@@ -26,9 +26,10 @@
 	let comp: any = { pubkey: null, view: null, loaded: false };
 	activeCompetition.subscribe((s) => (comp = s));
 
+	// Only Active routes through the per-cup PDA. Pending / settled fall
+	// through to main-account betting so the user keeps full access to their
+	// regular paper balance.
 	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
-	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
-	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
 
 	let events: PolyEvent[] = [];
 	let loading = true;
@@ -67,14 +68,6 @@
 		const priceDec = side === 'yes' ? selectedMarket.yesPrice ?? 0 : selectedMarket.noPrice ?? 0;
 		if (priceDec <= 0) {
 			message = 'Invalid market price.';
-			return;
-		}
-		if (tournamentPending) {
-			message = 'Tournament not started yet — waiting for the field to fill.';
-			return;
-		}
-		if (tournamentSettled) {
-			message = 'Tournament settled — claim your exit on /competition before betting.';
 			return;
 		}
 		busy = true;

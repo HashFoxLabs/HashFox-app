@@ -86,9 +86,12 @@
 	let comp: any = { pubkey: null, view: null, loaded: false };
 	activeCompetition.subscribe((s) => (comp = s));
 
+	// `inTournament` is the single source of truth for routing trades into the
+	// per-cup UserAccount PDA. Only true while the cup is *Active* — pending
+	// (waiting-for-fill) and settled (waiting-for-claim) states fall through to
+	// regular main-account trading so the user isn't locked out of their normal
+	// paper balance just because they have a cup queued up.
 	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
-	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
-	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
 
 	const isCrypto = category === 'crypto';
 
@@ -372,17 +375,6 @@
 				stopLoss && parseFloat(stopLoss) > 0 ? priceScaled(parseFloat(stopLoss)) : new BN(0);
 			const marginUsd = usd(requiredMargin);
 
-			if (tournamentPending) {
-				statusMessage = 'Tournament not started yet — waiting for the field to fill.';
-				busy = false;
-				return;
-			}
-			if (tournamentSettled) {
-				statusMessage = 'Tournament settled — claim exit on /competition before trading.';
-				busy = false;
-				return;
-			}
-
 			let sig = '';
 			if (tradingTabUI === 'limit') {
 				if (inTournament && comp.pubkey) {
@@ -595,13 +587,15 @@
 			solBalance = await hashfoxClient.getBalance();
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
-				// Tournament-mode account state lives on the per-comp UserAccount
-				// PDA, so swap the balance + positions source when we're in a cup.
+				// Cup-scoped account state only takes over while the cup is
+				// *Active*. During pending (waiting-for-fill) and settled
+				// (waiting-for-claim) we fall through to the main account so
+				// the user can keep trading with their regular paper balance.
 				// Track which source we ended up using so we tag the Supabase
 				// sync correctly — falling back to the main account on a comp
 				// fetch failure must NOT tag those main trades as comp trades.
 				let positionsAreComp = false;
-				if (comp?.pubkey && comp.view) {
+				if (inTournament && comp?.pubkey && comp.view) {
 					try {
 						const [{ findCompUserPda, fetchCompTradingPositions }, { USD_SCALE }] =
 							await Promise.all([import('$lib/competition'), import('$lib/hashfox')]);
@@ -629,6 +623,9 @@
 						positionsAreComp = true;
 					}
 				} else {
+					// No cup, or cup is pending / settled → main account is the
+					// active surface. Tag positions as non-comp so the Supabase
+					// sync doesn't mis-flag them with a competition_pubkey.
 					balance = await hashfoxClient.getBalanceBreakdown();
 					setUserBalance(balance);
 					positions = await hashfoxClient.fetchTradingPositions();
@@ -785,7 +782,9 @@
 		<div class="comp-banner {comp.view.status}">
 			<div class="cb-left">
 				<span class="cb-dot"></span>
-				<span class="cb-tag">TOURNAMENT MODE</span>
+				<span class="cb-tag">
+					{#if inTournament}TOURNAMENT MODE{:else}CUP QUEUED · MAIN ACCOUNT{/if}
+				</span>
 				<span class="cb-name">{comp.view.name}</span>
 				<span class="cb-creator">creator {comp.view.creator.slice(0, 4)}…{comp.view.creator.slice(-4)}</span>
 			</div>
@@ -793,9 +792,11 @@
 				{#if comp.view.status === 'active'}
 					<span class="cb-meta">Ends in {fmtCountdown(comp.view.endTs)}</span>
 				{:else if comp.view.status === 'pending'}
-					<span class="cb-meta">Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants})</span>
+					<span class="cb-meta">
+						Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants}) · trading on main until cup starts
+					</span>
 				{:else}
-					<span class="cb-meta">Settled — claim exit on /competition</span>
+					<span class="cb-meta">Settled — trading on main · claim exit on /competition</span>
 				{/if}
 				<a class="cb-link" href="/competition?cup={comp.pubkey?.toBase58()}">Open hub →</a>
 			</div>

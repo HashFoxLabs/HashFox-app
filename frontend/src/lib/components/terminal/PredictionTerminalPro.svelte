@@ -62,9 +62,10 @@
 	let comp: any = { pubkey: null, view: null, loaded: false };
 	activeCompetition.subscribe((s) => (comp = s));
 
+	// Mirrors TradingTerminalPro: only Active routes through the per-cup PDA;
+	// pending and settled fall through to main-account trading so the user
+	// keeps full access to their regular paper balance.
 	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
-	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
-	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
 
 	let events: PolyEvent[] = [];
 	let statsEvents: PolyEvent[] = [];
@@ -206,10 +207,11 @@
 			solBalance = await hashfoxClient.getBalance();
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
-				// In tournament mode the live balance lives on the per-cup
-				// UserAccount PDA. Mirror what TradingTerminalPro does so the
-				// prediction tab stays consistent with the navbar.
-				if (comp?.pubkey && comp.view) {
+				// Cup-scoped balance only takes over while the cup is *Active*.
+				// In pending / settled we surface the main account so the
+				// trader can keep using their regular paper balance — same
+				// rule as TradingTerminalPro / TopChrome.
+				if (inTournament && comp?.pubkey && comp.view) {
 					try {
 						const [{ findCompUserPda }, { USD_SCALE }] = await Promise.all([
 							import('$lib/competition'),
@@ -330,15 +332,6 @@
 			(!selectedPosition || amount > selectedPosition.remainingShares + 0.01)
 		) {
 			statusMessage = 'Not enough shares to sell.';
-			return;
-		}
-
-		if (tradeTab === 'Buy' && tournamentPending) {
-			statusMessage = 'Tournament not started — waiting for the field to fill.';
-			return;
-		}
-		if (tradeTab === 'Buy' && tournamentSettled) {
-			statusMessage = 'Tournament settled — claim exit on /competition.';
 			return;
 		}
 
@@ -517,16 +510,20 @@
 		<div class="comp-banner {comp.view.status}">
 			<div class="cb-left">
 				<span class="cb-dot"></span>
-				<span class="cb-tag">TOURNAMENT MODE</span>
+				<span class="cb-tag">
+					{#if inTournament}TOURNAMENT MODE{:else}CUP QUEUED · MAIN ACCOUNT{/if}
+				</span>
 				<span class="cb-name">{comp.view.name}</span>
 			</div>
 			<div class="cb-right">
 				{#if comp.view.status === 'active'}
 					<span class="cb-meta">Ends in {fmtCountdown(comp.view.endTs)}</span>
 				{:else if comp.view.status === 'pending'}
-					<span class="cb-meta">Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants})</span>
+					<span class="cb-meta">
+						Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants}) · trading on main until cup starts
+					</span>
 				{:else}
-					<span class="cb-meta">Settled — claim exit on /competition</span>
+					<span class="cb-meta">Settled — trading on main · claim exit on /competition</span>
 				{/if}
 				<a class="cb-link" href="/competition?cup={comp.pubkey?.toBase58()}">Open hub →</a>
 			</div>

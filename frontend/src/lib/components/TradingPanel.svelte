@@ -36,9 +36,10 @@
 	let comp: any = { pubkey: null, view: null, loaded: false };
 	activeCompetition.subscribe((s) => (comp = s));
 
+	// Only Active routes through the per-cup PDA. Pending / settled fall
+	// through to main-account trading so the user keeps full access to their
+	// regular paper balance.
 	$: inTournament = !!(comp?.pubkey && comp.view && comp.view.status === 'active');
-	$: tournamentPending = !!(comp?.pubkey && comp.view && comp.view.status === 'pending');
-	$: tournamentSettled = !!(comp?.pubkey && comp.view && comp.view.status === 'settled');
 
 	onMount(() => {
 		refreshActiveCompetition();
@@ -87,14 +88,6 @@
 		}
 		if (!current) {
 			message = 'Price not available yet — waiting for Pyth stream.';
-			return;
-		}
-		if (tournamentPending) {
-			message = 'Tournament not started yet — waiting for the field to fill.';
-			return;
-		}
-		if (tournamentSettled) {
-			message = 'Tournament settled — claim your exit on /competition before trading.';
 			return;
 		}
 		busy = true;
@@ -187,16 +180,20 @@
 		<div class="comp-banner {comp.view.status}">
 			<div class="cb-left">
 				<span class="cb-dot"></span>
-				<span class="cb-tag">TOURNAMENT MODE</span>
+				<span class="cb-tag">
+					{#if inTournament}TOURNAMENT MODE{:else}CUP QUEUED · MAIN ACCOUNT{/if}
+				</span>
 				<span class="cb-name">{comp.view.name}</span>
 			</div>
 			<div class="cb-right">
 				{#if comp.view.status === 'active'}
 					<span class="cb-meta">Ends in {fmtCountdown(comp.view.endTs)}</span>
 				{:else if comp.view.status === 'pending'}
-					<span class="cb-meta">Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants})</span>
+					<span class="cb-meta">
+						Pending fill ({comp.view.participantCount}/{comp.view.maxParticipants}) · trading on main until cup starts
+					</span>
 				{:else}
-					<span class="cb-meta">Settled — claim exit on /competition</span>
+					<span class="cb-meta">Settled — trading on main · claim exit on /competition</span>
 				{/if}
 			</div>
 		</div>

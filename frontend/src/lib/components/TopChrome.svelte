@@ -87,16 +87,20 @@
 		view: null,
 		loaded: false
 	};
-	// Re-pull the balance only when the cup *identity* changes (join / claim /
-	// settle), NOT on every store write. refreshStatus itself writes to this
-	// same store via refreshActiveCompetition, so naïvely subscribing here was
-	// creating an RPC-bound infinite loop.
-	let lastCompKey: string | null = null;
+	// Re-pull the balance when either the cup *identity* (join / claim) OR
+	// the cup *status* changes — status flipping pending → active flips the
+	// balance source between main and per-cup PDA, so we have to refresh on
+	// both. We still skip refreshes that would only echo our own writes
+	// (refreshStatus → setUserBalance → ... ) to avoid an RPC-bound loop;
+	// the dedupe key encodes both pubkey + status so identical writes no-op.
+	let lastCompSig: string | null = null;
 	activeCompetition.subscribe((s) => {
 		activeComp = s;
-		const key = s.pubkey ? s.pubkey.toBase58() : null;
-		if (key === lastCompKey) return;
-		lastCompKey = key;
+		const key = s.pubkey ? s.pubkey.toBase58() : '';
+		const status = s.view?.status ?? '';
+		const sig = `${key}|${status}`;
+		if (sig === lastCompSig) return;
+		lastCompSig = sig;
 		if (connectedWallet?.connected && accountInitialized) void refreshStatus();
 	});
 
@@ -162,13 +166,13 @@
 			walletBalanceSol = await hashfoxClient.getBalance();
 			accountInitialized = await hashfoxClient.isAccountInitialized();
 			if (accountInitialized) {
-				// When the user is inside a tournament, the source of truth for
-				// "balance" is the per-cup UserAccount PDA — the main account
-				// stays at its pre-join state until claim_exit. Route through
-				// that PDA here so the navbar matches what TradingTerminalPro
-				// renders and no longer flickers between the two.
+				// Only show the per-cup balance while the cup is *Active*.
+				// During pending (waiting-for-fill) and settled (waiting-for-
+				// claim) the user is back on their main paper balance — the
+				// terminals route trades there too, so the navbar must match.
 				const compPubkey = activeComp?.pubkey;
-				if (compPubkey && connectedWallet.publicKey) {
+				const compIsLive = activeComp?.view?.status === 'active';
+				if (compIsLive && compPubkey && connectedWallet.publicKey) {
 					try {
 						const program = hashfoxClient.getProgram();
 						const [compUserPda] = findCompUserPda(compPubkey, connectedWallet.publicKey);

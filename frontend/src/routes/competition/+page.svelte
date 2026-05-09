@@ -560,9 +560,9 @@
 					{#if myActiveLive}
 						Live · ends in {fmtCountdown(myActive.view.endTs)}
 					{:else if myActivePending}
-						Pending · waiting for {myActive.view.maxParticipants - myActive.view.participantCount} more entries
+						Pending · waiting for {myActive.view.maxParticipants - myActive.view.participantCount} more entries · trade with your main balance until the cup starts
 					{:else if myActiveSettled}
-						Settled — claim your exit to free your wallet for the next cup
+						Settled — main-balance trading is back · claim your exit to free your wallet for the next cup
 					{/if}
 				</span>
 			</div>
@@ -575,6 +575,8 @@
 				</button>
 				{#if myActiveLive}
 					<button class="primary" on:click={() => goto('/terminal')}>OPEN TERMINAL</button>
+				{:else if myActivePending}
+					<button class="primary" on:click={() => goto('/terminal')}>TRADE MAIN ACCOUNT</button>
 				{:else if myActiveSettled}
 					<button
 						class="primary"
@@ -814,7 +816,9 @@
 						<div class="cup-actions">
 							{#if selected.status === 'pending'}
 								{#if amInThis}
-									<button class="primary" disabled>YOU'RE IN — TRADING UNLOCKS AT FILL</button>
+									<button class="primary" on:click={() => goto('/terminal')}>
+										YOU'RE IN — TRADE MAIN UNTIL CUP STARTS
+									</button>
 								{:else if alreadyInOther}
 									<button class="primary" disabled>ALREADY IN ANOTHER CUP</button>
 								{:else}
