@@ -1,3 +1,23 @@
+<script lang="ts" context="module">
+	import { LineStyle, type LineWidth } from 'lightweight-charts';
+
+	/** A horizontal price line drawn on the candle series. Used by parent
+	 *  terminals to surface entry / TP / SL / liquidation levels for open
+	 *  positions (and live previews while the user types into the order form). */
+	export type ChartPriceLineSpec = {
+		/** Stable id so we can diff lines across renders without flicker. */
+		id: string;
+		price: number;
+		color: string;
+		title: string;
+		lineStyle?: LineStyle;
+		lineWidth?: LineWidth;
+		axisLabelVisible?: boolean;
+		axisLabelColor?: string;
+		axisLabelTextColor?: string;
+	};
+</script>
+
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { pythPrices } from '$lib/stores/pythPrices';
@@ -7,15 +27,17 @@
 		CandlestickSeries,
 		type IChartApi,
 		type ISeriesApi,
+		type IPriceLine,
 		type CandlestickData,
 		type CandlestickSeriesOptions,
 		type Time,
-		CrosshairMode,
-		LineStyle
+		CrosshairMode
 	} from 'lightweight-charts';
 
 	export let symbol: string = 'SOL';
 	export let interval: string = '1m';
+	/** Optional list of horizontal price lines (entry, TP, SL, liq, previews). */
+	export let priceLines: ChartPriceLineSpec[] = [];
 
 	/** Bucket size in seconds for live aggregation. */
 	const INTERVALS: Record<string, number> = {
@@ -52,6 +74,8 @@
 	let unsubPrices: (() => void) | undefined;
 	let activeKey = '';
 	let loadError = '';
+	/** Live price-line handles indexed by spec id so we can diff cheaply. */
+	const activePriceLines: Map<string, IPriceLine> = new Map();
 
 	function barTime(ts: number, bucketSec: number): Time {
 		return (Math.floor(ts / 1000 / bucketSec) * bucketSec) as Time;
@@ -207,6 +231,55 @@
 		}
 	}
 
+	/** Reconcile the `priceLines` prop against the chart by diffing on `id`.
+	 *  We update in place where possible so the lines don't flicker on every
+	 *  parent re-render (positions poll every 10s, prices tick every ~50ms). */
+	function syncPriceLines() {
+		if (!candleSeries) return;
+		const wanted = new Set<string>();
+		for (const spec of priceLines) {
+			if (!spec || !Number.isFinite(spec.price) || spec.price <= 0) continue;
+			wanted.add(spec.id);
+			const opts = {
+				price: spec.price,
+				color: spec.color,
+				lineWidth: (spec.lineWidth ?? 1) as LineWidth,
+				lineStyle: spec.lineStyle ?? LineStyle.Solid,
+				lineVisible: true,
+				axisLabelVisible: spec.axisLabelVisible ?? true,
+				axisLabelColor: spec.axisLabelColor ?? spec.color,
+				axisLabelTextColor: spec.axisLabelTextColor ?? '#000',
+				title: spec.title
+			};
+			const existing = activePriceLines.get(spec.id);
+			if (existing) {
+				existing.applyOptions(opts);
+			} else {
+				try {
+					const pl = candleSeries.createPriceLine(opts);
+					activePriceLines.set(spec.id, pl);
+				} catch {
+					/* Series may be tearing down — skip; next sync will retry. */
+				}
+			}
+		}
+		// Drop any lines that the parent no longer wants.
+		for (const [id, pl] of activePriceLines) {
+			if (!wanted.has(id)) {
+				try {
+					candleSeries.removePriceLine(pl);
+				} catch {
+					/* Already detached (series was rebuilt); ignore. */
+				}
+				activePriceLines.delete(id);
+			}
+		}
+	}
+
+	function clearPriceLines() {
+		activePriceLines.clear();
+	}
+
 	async function initChart(sym: string, iv: string) {
 		const key = `${sym}:${iv}`;
 		if (!container) return;
@@ -215,6 +288,9 @@
 			chart = null;
 			candleSeries = null;
 			currentBar = null;
+			// The old series owned these handles. Drop them so the new series
+			// re-creates them from scratch on the next sync.
+			clearPriceLines();
 		}
 		activeKey = key;
 		loadError = '';
@@ -267,6 +343,8 @@
 			} else if (candleSeries) {
 				loadError = 'No history available';
 			}
+			// Rehydrate TP/SL/Liq/Entry markers for the freshly built series.
+			syncPriceLines();
 		} catch (err) {
 			loadError = err instanceof Error ? err.message : 'Load failed';
 		}
@@ -316,6 +394,11 @@
 			initChart(symbol, interval).then(subscribePrices);
 		}
 	}
+
+	// Re-sync whenever the parent hands us a new set of price-line specs.
+	// `priceLines` is referenced here purely so Svelte tracks it as a dep;
+	// `syncPriceLines` reads from the prop directly.
+	$: if (candleSeries && priceLines) syncPriceLines();
 
 	$: quote = quoteFor(symbol);
 </script>

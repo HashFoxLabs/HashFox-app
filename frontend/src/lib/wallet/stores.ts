@@ -231,6 +231,7 @@ class WalletManager {
 			}));
 			localStorage.setItem('solana-wallet', EMBEDDED_WALLET_NAME);
 			void hydrateProfile(result.publicKey.toBase58());
+			void maybeAirdropEmbedded(result.publicKey.toBase58());
 		} catch (err) {
 			walletStore.update((state) => ({ ...state, connecting: false }));
 			throw err;
@@ -297,6 +298,32 @@ class WalletManager {
 		} catch {
 			localStorage.removeItem('solana-wallet');
 		}
+	}
+}
+
+/** Fire-and-forget one-shot devnet airdrop for brand-new embedded wallets.
+ *  Idempotent server-side (the endpoint gates on the destination having zero
+ *  on-chain history), so a localStorage flag is just an extra client cache to
+ *  avoid an unnecessary round-trip on subsequent logins from this device. */
+async function maybeAirdropEmbedded(walletAddress: string) {
+	if (!browser) return;
+	try {
+		const flagKey = `hashfox-embedded-airdrop:${walletAddress}`;
+		if (localStorage.getItem(flagKey)) return;
+		const res = await fetch('/api/embedded-airdrop', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ address: walletAddress })
+		});
+		if (!res.ok) return;
+		const data = (await res.json().catch(() => null)) as
+			| { sent: boolean; signature?: string }
+			| null;
+		// Cache the outcome either way: if `sent: false`, the address is no
+		// longer "new" so future calls would be no-ops anyway.
+		localStorage.setItem(flagKey, data?.signature ?? '1');
+	} catch (err) {
+		console.warn('[WALLET] embedded airdrop failed', err);
 	}
 }
 

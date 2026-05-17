@@ -31,7 +31,10 @@
 		type MarketCategory,
 		type MarketEntry
 	} from '$lib/markets';
-	import PythChart from '$lib/components/terminal/PythChart.svelte';
+	import PythChart, {
+		type ChartPriceLineSpec
+	} from '$lib/components/terminal/PythChart.svelte';
+	import { LineStyle } from 'lightweight-charts';
 	import {
 		binanceOrderBook,
 		binanceTrades,
@@ -719,6 +722,148 @@
 	$: isSpotMarketSell = tradingTabUI === 'spot' && tradeSide === 'sell';
 	$: sellBlocked = isSpotSell && currentSymbolHoldings.length === 0;
 
+	/* ----- chart price lines for the active market -----
+	 * For every open / pending position on the current pair we draw:
+	 *   • Entry (or Limit) price — solid, side-colored
+	 *   • Take-profit — dashed green
+	 *   • Stop-loss   — dashed red
+	 *   • Liquidation (perps only) — dotted orange, thicker
+	 * Plus live preview lines for the values the user is currently typing into
+	 * the order form, so traders can eyeball their TP/SL/limit before clicking
+	 * Submit. The lines disappear automatically once the position closes or
+	 * the input is cleared. */
+	$: positionsForChart = positions.filter(
+		(p) =>
+			p.pairSymbol === market?.symbol &&
+			(p.status === 'active' || p.status === 'pending')
+	);
+	$: chartPriceLines = (() => {
+		const lines: ChartPriceLineSpec[] = [];
+		const decimals = market?.decimals ?? 2;
+		const fmt = (n: number) =>
+			n.toLocaleString('en-US', {
+				minimumFractionDigits: decimals,
+				maximumFractionDigits: decimals
+			});
+
+		for (const p of positionsForChart) {
+			const sideLabel =
+				p.tradeMode === 'perp'
+					? p.direction.toUpperCase()
+					: p.direction === 'long'
+						? 'BUY'
+						: 'SELL';
+			const idTag = `${p.tradeMode === 'perp' ? `${p.leverage}x ` : ''}${sideLabel} #${p.positionId}`;
+			const sideColor = p.direction === 'long' ? '#10c980' : '#ef4f5f';
+
+			if (p.status === 'active' && p.entryPrice > 0) {
+				lines.push({
+					id: `${p.pubkey}:entry`,
+					price: p.entryPrice,
+					color: sideColor,
+					title: `Entry ${idTag} · ${fmt(p.entryPrice)}`,
+					lineStyle: LineStyle.Solid,
+					lineWidth: 1,
+					axisLabelTextColor: '#000'
+				});
+			}
+			if (p.status === 'pending' && p.limitPrice > 0) {
+				lines.push({
+					id: `${p.pubkey}:limit`,
+					price: p.limitPrice,
+					color: '#ffb84d',
+					title: `Limit ${idTag} · ${fmt(p.limitPrice)}`,
+					lineStyle: LineStyle.Dashed,
+					lineWidth: 1,
+					axisLabelTextColor: '#000'
+				});
+			}
+			if (p.takeProfitPrice > 0) {
+				lines.push({
+					id: `${p.pubkey}:tp`,
+					price: p.takeProfitPrice,
+					color: '#00ff64',
+					title: `TP ${idTag} · ${fmt(p.takeProfitPrice)}`,
+					lineStyle: LineStyle.Dashed,
+					lineWidth: 1,
+					axisLabelTextColor: '#000'
+				});
+			}
+			if (p.stopLossPrice > 0) {
+				lines.push({
+					id: `${p.pubkey}:sl`,
+					price: p.stopLossPrice,
+					color: '#ff4444',
+					title: `SL ${idTag} · ${fmt(p.stopLossPrice)}`,
+					lineStyle: LineStyle.Dashed,
+					lineWidth: 1,
+					axisLabelTextColor: '#fff'
+				});
+			}
+			if (
+				p.tradeMode === 'perp' &&
+				p.status === 'active' &&
+				p.liquidationPrice > 0
+			) {
+				lines.push({
+					id: `${p.pubkey}:liq`,
+					price: p.liquidationPrice,
+					color: '#ff5a00',
+					title: `LIQ ${idTag} · ${fmt(p.liquidationPrice)}`,
+					lineStyle: LineStyle.Dotted,
+					lineWidth: 2,
+					axisLabelTextColor: '#000'
+				});
+			}
+		}
+
+		// Live previews from the order form. These only show while the field
+		// has a positive value, so they vanish as soon as the user submits
+		// (we clear the inputs in submitOrder) or wipes them manually.
+		const previewTp = parseFloat(takeProfit);
+		const previewSl = parseFloat(stopLoss);
+		const previewLimit = parseFloat(limitPriceInput);
+		if (Number.isFinite(previewTp) && previewTp > 0) {
+			lines.push({
+				id: 'preview:tp',
+				price: previewTp,
+				color: 'rgba(0, 255, 100, 0.85)',
+				title: `TP preview · ${fmt(previewTp)}`,
+				lineStyle: LineStyle.LargeDashed,
+				lineWidth: 1,
+				axisLabelTextColor: '#000'
+			});
+		}
+		if (Number.isFinite(previewSl) && previewSl > 0) {
+			lines.push({
+				id: 'preview:sl',
+				price: previewSl,
+				color: 'rgba(255, 68, 68, 0.85)',
+				title: `SL preview · ${fmt(previewSl)}`,
+				lineStyle: LineStyle.LargeDashed,
+				lineWidth: 1,
+				axisLabelTextColor: '#fff'
+			});
+		}
+		if (
+			tradingTabUI === 'limit' &&
+			Number.isFinite(previewLimit) &&
+			previewLimit > 0
+		) {
+			lines.push({
+				id: 'preview:limit',
+				price: previewLimit,
+				color: 'rgba(255, 184, 77, 0.85)',
+				title: `Limit preview · ${fmt(previewLimit)}`,
+				lineStyle: LineStyle.LargeDashed,
+				lineWidth: 1,
+				axisLabelTextColor: '#000'
+			});
+		}
+
+		return lines;
+	})();
+
 	$: unrealizedPnl = (() => {
 		let sum = 0;
 		for (const p of visiblePositions) {
@@ -901,8 +1046,23 @@
 						title="{market.symbol} Chart"
 						allow="fullscreen"
 					></iframe>
+					{#if chartPriceLines.length > 0}
+						<!-- TradingView is a 3rd-party iframe so we can't paint TP/SL/Liq
+						     on it. Surface a one-click switch to Pyth Live, which we control
+						     and where the lines are already rendering. -->
+						<button
+							type="button"
+							class="tv-lines-hint"
+							on:click={() => (chartView = 'pyth')}
+							title="Switch to Pyth Live to see your TP / SL / Liquidation lines on the chart"
+						>
+							<span class="tv-lines-dot"></span>
+							{chartPriceLines.length} order line{chartPriceLines.length === 1 ? '' : 's'}
+							· view on Pyth Live →
+						</button>
+					{/if}
 				{:else}
-					<PythChart symbol={market.symbol} interval="15m" />
+					<PythChart symbol={market.symbol} interval="15m" priceLines={chartPriceLines} />
 				{/if}
 			</div>
 		</div>
@@ -1620,6 +1780,41 @@
 		flex: 1;
 		min-height: 0;
 		background: #0a0a0a;
+		position: relative;
+	}
+
+	.tv-lines-hint {
+		position: absolute;
+		top: 10px;
+		right: 12px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 11px;
+		font-family: inherit;
+		font-size: 10px;
+		font-weight: 900;
+		letter-spacing: 0.06em;
+		color: #ff5a00;
+		background: rgba(0, 0, 0, 0.78);
+		border: 1px solid rgba(255, 90, 0, 0.55);
+		border-radius: 999px;
+		cursor: pointer;
+		backdrop-filter: blur(4px);
+		box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+		z-index: 5;
+	}
+	.tv-lines-hint:hover {
+		background: rgba(255, 90, 0, 0.12);
+		color: #ffb84d;
+		border-color: #ffb84d;
+	}
+	.tv-lines-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: #ff5a00;
+		box-shadow: 0 0 6px rgba(255, 90, 0, 0.8);
 	}
 
 	/* Orderbook */
