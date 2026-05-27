@@ -18,11 +18,14 @@ pub const PRICE_SCALE: u128 = 1_000_000;
 /// Max price per prediction share: $1.00 (6 decimals)
 pub const MAX_PREDICTION_PRICE: u64 = 1_000_000;
 
-/// Competition duration bounds (seconds).
-pub const COMP_MIN_DURATION_SECS: i64 = 3 * 86_400;
+/// Competition duration bounds (seconds). Min is 1 hour so cups can be run
+/// at hour granularity, not only days.
+pub const COMP_MIN_DURATION_SECS: i64 = 3_600;
 pub const COMP_MAX_DURATION_SECS: i64 = 21 * 86_400;
 /// Minimum participant count: enough to fill a top-3 podium.
 pub const COMP_MIN_PARTICIPANTS: u64 = 3;
+/// Upper bound on participants to keep target math + UX sane.
+pub const COMP_MAX_PARTICIPANTS: u64 = 10_000;
 /// Reward split (basis points, sums to 10_000).
 pub const COMP_REWARD_FIRST_BPS: u64 = 5_000;
 pub const COMP_REWARD_SECOND_BPS: u64 = 3_000;
@@ -583,13 +586,16 @@ pub mod hashfox {
 
     /// Create a new competition. The creator only configures it — they don't
     /// auto-join, and they have no privileged role afterwards. Status starts
-    /// as `Pending` and flips to `Active` automatically once `participant_count
-    /// * entry_ticket_lamports >= target_lamports` in `join_competition`.
+    /// as `Pending` and flips to `Active` automatically once every seat is
+    /// taken (for paid comps: `prize_pool >= target_lamports`; for free comps:
+    /// `participant_count >= max_participants`). Free comps (entry == 0) are
+    /// allowed for any creator; admins can also force-start a Pending cup
+    /// before it's full via `admin_force_start_competition`.
     pub fn create_competition(
         ctx: Context<CreateCompetition>,
         name: String,
         entry_ticket_lamports: u64,
-        target_lamports: u64,
+        max_participants: u64,
         duration_secs: i64,
     ) -> Result<()> {
         require!(!name.is_empty(), ErrorCode::CompetitionNameInvalid);
@@ -597,21 +603,18 @@ pub mod hashfox {
             name.len() <= COMP_NAME_MAX_LEN,
             ErrorCode::CompetitionNameInvalid
         );
-        require!(entry_ticket_lamports > 0, ErrorCode::InvalidEntryTicket);
         require!(
-            target_lamports >= entry_ticket_lamports
-                .checked_mul(COMP_MIN_PARTICIPANTS)
-                .unwrap(),
-            ErrorCode::InvalidTargetAllocation
-        );
-        require!(
-            target_lamports % entry_ticket_lamports == 0,
+            max_participants >= COMP_MIN_PARTICIPANTS && max_participants <= COMP_MAX_PARTICIPANTS,
             ErrorCode::InvalidTargetAllocation
         );
         require!(
             duration_secs >= COMP_MIN_DURATION_SECS && duration_secs <= COMP_MAX_DURATION_SECS,
             ErrorCode::InvalidCompetitionDuration
         );
+
+        let target_lamports = entry_ticket_lamports
+            .checked_mul(max_participants)
+            .ok_or(ErrorCode::InvalidTargetAllocation)?;
 
         let comp = &mut ctx.accounts.competition;
         comp.creator = ctx.accounts.creator.key();
@@ -626,7 +629,7 @@ pub mod hashfox {
         comp.end_ts = 0;
         comp.status = CompetitionStatus::Pending;
         comp.participant_count = 0;
-        comp.max_participants = target_lamports / entry_ticket_lamports;
+        comp.max_participants = max_participants;
         comp.prize_pool = 0;
         comp.top = [LeaderEntry::default(); 3];
         comp.created_at = Clock::get()?.unix_timestamp;
@@ -666,14 +669,16 @@ pub mod hashfox {
             ErrorCode::AlreadyInCompetition
         );
 
-        let cpi = CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            anchor_lang::system_program::Transfer {
-                from: ctx.accounts.user.to_account_info(),
-                to: ctx.accounts.vault.to_account_info(),
-            },
-        );
-        anchor_lang::system_program::transfer(cpi, comp.entry_ticket_lamports)?;
+        if comp.entry_ticket_lamports > 0 {
+            let cpi = CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.user.to_account_info(),
+                    to: ctx.accounts.vault.to_account_info(),
+                },
+            );
+            anchor_lang::system_program::transfer(cpi, comp.entry_ticket_lamports)?;
+        }
 
         let clock = Clock::get()?;
         let comp_ua = &mut ctx.accounts.comp_user_account;
@@ -702,8 +707,14 @@ pub mod hashfox {
             timestamp: clock.unix_timestamp,
         });
 
-        // Auto-start when target is reached.
-        if comp.prize_pool >= comp.target_lamports {
+        // Auto-start when the cup is full. For free comps (entry == 0) the
+        // prize-pool target is always 0, so fall back to participant count.
+        let full = if comp.entry_ticket_lamports == 0 {
+            comp.participant_count >= comp.max_participants
+        } else {
+            comp.prize_pool >= comp.target_lamports
+        };
+        if full {
             comp.status = CompetitionStatus::Active;
             comp.start_ts = clock.unix_timestamp;
             comp.end_ts = clock
@@ -886,6 +897,129 @@ pub mod hashfox {
             competition: comp.key(),
             participant: main_ua.owner,
         });
+        Ok(())
+    }
+
+    // ─── Admin competition controls ───────────────────────────────────────────
+
+    /// Admin-only. Flip a Pending competition to Active even if the target
+    /// hasn't been reached yet. Useful for kicking off small/test cups or
+    /// running a free comp where there's no lamports target to hit.
+    /// Requires at least 1 participant so the podium has someone to settle to.
+    pub fn admin_force_start_competition(ctx: Context<AdminCompetitionAction>) -> Result<()> {
+        require_authority(&ctx.accounts.config, &ctx.accounts.authority.key())?;
+        let comp = &mut ctx.accounts.competition;
+        require!(
+            comp.status == CompetitionStatus::Pending,
+            ErrorCode::CompetitionNotJoinable
+        );
+        require!(comp.participant_count >= 1, ErrorCode::CompetitionEmpty);
+
+        let clock = Clock::get()?;
+        comp.status = CompetitionStatus::Active;
+        comp.start_ts = clock.unix_timestamp;
+        comp.end_ts = clock
+            .unix_timestamp
+            .checked_add(comp.duration_secs)
+            .ok_or(ErrorCode::InvalidCompetitionDuration)?;
+        emit!(CompetitionStarted {
+            competition: comp.key(),
+            start_ts: comp.start_ts,
+            end_ts: comp.end_ts,
+            participant_count: comp.participant_count,
+            prize_pool: comp.prize_pool,
+        });
+        Ok(())
+    }
+
+    /// Admin-only. Refund a single participant: returns their entry ticket
+    /// from the vault, clears `active_competition` on their main UserAccount,
+    /// closes their comp_user PDA (rent → participant), and decrements
+    /// participant_count + prize_pool. Call once per participant; then call
+    /// `admin_close_competition` to wipe the cup entirely.
+    pub fn admin_refund_participant(ctx: Context<AdminRefundParticipant>) -> Result<()> {
+        require_authority(&ctx.accounts.config, &ctx.accounts.authority.key())?;
+
+        let comp = &mut ctx.accounts.competition;
+        require!(
+            comp.status == CompetitionStatus::Pending || comp.status == CompetitionStatus::Active,
+            ErrorCode::CompetitionAlreadySettled
+        );
+
+        let main_ua = &mut ctx.accounts.participant_user_account;
+        require!(
+            main_ua.active_competition == comp.key(),
+            ErrorCode::NotInThisCompetition
+        );
+
+        if comp.entry_ticket_lamports > 0 {
+            let comp_key = comp.key();
+            let vault_bump = [comp.vault_bump];
+            let vault_seeds: &[&[u8]] = &[b"comp_vault", comp_key.as_ref(), &vault_bump];
+            let signer_seeds: &[&[&[u8]]] = &[vault_seeds];
+            let cpi = CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.participant.to_account_info(),
+                },
+                signer_seeds,
+            );
+            anchor_lang::system_program::transfer(cpi, comp.entry_ticket_lamports)?;
+        }
+
+        main_ua.active_competition = Pubkey::default();
+        comp.participant_count = comp.participant_count.saturating_sub(1);
+        comp.prize_pool = comp.prize_pool.saturating_sub(comp.entry_ticket_lamports);
+
+        // Wipe the participant from the cached top-3 so settle/close can't
+        // try to pay them.
+        for entry in comp.top.iter_mut() {
+            if entry.participant == main_ua.owner {
+                *entry = LeaderEntry::default();
+            }
+        }
+
+        emit!(CompetitionParticipantRefunded {
+            competition: comp.key(),
+            participant: main_ua.owner,
+            refund_lamports: comp.entry_ticket_lamports,
+        });
+        Ok(())
+    }
+
+    /// Admin-only. Tear down a competition that's been fully refunded: sweeps
+    /// any vault dust to treasury and closes the Competition account (rent
+    /// → authority). Requires participant_count == 0.
+    pub fn admin_close_competition(ctx: Context<AdminCloseCompetition>) -> Result<()> {
+        require_authority(&ctx.accounts.config, &ctx.accounts.authority.key())?;
+
+        let comp = &ctx.accounts.competition;
+        require!(comp.participant_count == 0, ErrorCode::CompetitionNotEmpty);
+
+        let comp_key = comp.key();
+        let vault_bump = [comp.vault_bump];
+        let vault_seeds: &[&[u8]] = &[b"comp_vault", comp_key.as_ref(), &vault_bump];
+        let signer_seeds: &[&[&[u8]]] = &[vault_seeds];
+
+        let vault_balance = ctx.accounts.vault.lamports();
+        if vault_balance > 0 {
+            let cpi = CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.treasury.to_account_info(),
+                },
+                signer_seeds,
+            );
+            anchor_lang::system_program::transfer(cpi, vault_balance)?;
+        }
+
+        emit!(CompetitionClosed {
+            competition: comp_key,
+            swept_to_treasury: vault_balance,
+        });
+        // `close = authority` on the account constraint handles the comp rent.
         Ok(())
     }
 
@@ -1135,6 +1269,11 @@ fn require_executor(config: &ProgramConfig, executor: &Pubkey) -> Result<()> {
         config.authorized_executors.contains(executor),
         ErrorCode::UnauthorizedExecutor
     );
+    Ok(())
+}
+
+fn require_authority(config: &ProgramConfig, signer: &Pubkey) -> Result<()> {
+    require!(config.authority == *signer, ErrorCode::Unauthorized);
     Ok(())
 }
 
@@ -2168,6 +2307,89 @@ pub struct ClaimCompetitionExit<'info> {
     pub user: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct AdminCompetitionAction<'info> {
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, ProgramConfig>,
+    #[account(
+        mut,
+        seeds = [b"comp", competition.creator.as_ref(), competition.name[..competition.name_len as usize].as_ref()],
+        bump = competition.bump,
+    )]
+    pub competition: Account<'info, Competition>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AdminRefundParticipant<'info> {
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, ProgramConfig>,
+    #[account(
+        mut,
+        seeds = [b"comp", competition.creator.as_ref(), competition.name[..competition.name_len as usize].as_ref()],
+        bump = competition.bump,
+    )]
+    pub competition: Account<'info, Competition>,
+    /// CHECK: PDA derived from `[b"comp_vault", competition]`. Source of refund.
+    #[account(
+        mut,
+        seeds = [b"comp_vault", competition.key().as_ref()],
+        bump = competition.vault_bump,
+    )]
+    pub vault: SystemAccount<'info>,
+    /// Participant's per-comp account — closed to the participant on refund.
+    #[account(
+        mut,
+        seeds = [b"comp_user", competition.key().as_ref(), participant.key().as_ref()],
+        bump = comp_user_account.bump,
+        constraint = comp_user_account.owner == participant.key() @ ErrorCode::Unauthorized,
+        close = participant
+    )]
+    pub comp_user_account: Account<'info, UserAccount>,
+    /// Participant's main account — `active_competition` cleared here so they
+    /// can join the next cup.
+    #[account(
+        mut,
+        seeds = [b"user", participant.key().as_ref()],
+        bump = participant_user_account.bump,
+        constraint = participant_user_account.owner == participant.key() @ ErrorCode::Unauthorized,
+    )]
+    pub participant_user_account: Account<'info, UserAccount>,
+    /// CHECK: wallet refund target. No PDA derivation needed — it's matched
+    /// against the comp_user_account.owner above.
+    #[account(mut)]
+    pub participant: SystemAccount<'info>,
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AdminCloseCompetition<'info> {
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, ProgramConfig>,
+    #[account(
+        mut,
+        seeds = [b"comp", competition.creator.as_ref(), competition.name[..competition.name_len as usize].as_ref()],
+        bump = competition.bump,
+        close = authority
+    )]
+    pub competition: Account<'info, Competition>,
+    /// CHECK: PDA derived from `[b"comp_vault", competition]`. Drained to
+    /// treasury before close.
+    #[account(
+        mut,
+        seeds = [b"comp_vault", competition.key().as_ref()],
+        bump = competition.vault_bump,
+    )]
+    pub vault: SystemAccount<'info>,
+    /// CHECK: Validated against `config.treasury`.
+    #[account(mut, constraint = treasury.key() == config.treasury @ ErrorCode::InvalidTreasuryAccount)]
+    pub treasury: SystemAccount<'info>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[derive(Accounts, Session)]
 pub struct CompOpenTradingPositionCtx<'info> {
     #[account(
@@ -2504,6 +2726,19 @@ pub struct CompetitionExitClaimed {
     pub participant: Pubkey,
 }
 
+#[event]
+pub struct CompetitionParticipantRefunded {
+    pub competition: Pubkey,
+    pub participant: Pubkey,
+    pub refund_lamports: u64,
+}
+
+#[event]
+pub struct CompetitionClosed {
+    pub competition: Pubkey,
+    pub swept_to_treasury: u64,
+}
+
 // ============= ERRORS =============
 
 #[error_code]
@@ -2574,10 +2809,10 @@ pub enum ErrorCode {
     #[msg("Entry ticket must be greater than zero")]
     InvalidEntryTicket,
 
-    #[msg("Target allocation must be a multiple of the entry ticket and allow at least 3 participants")]
+    #[msg("max_participants must be between COMP_MIN_PARTICIPANTS and COMP_MAX_PARTICIPANTS")]
     InvalidTargetAllocation,
 
-    #[msg("Competition duration must be between 3 and 21 days")]
+    #[msg("Competition duration must be between 1 hour and 21 days")]
     InvalidCompetitionDuration,
 
     #[msg("Competition is not accepting joiners")]
@@ -2612,4 +2847,13 @@ pub enum ErrorCode {
 
     #[msg("Prize pool arithmetic overflow")]
     PrizePoolMath,
+
+    #[msg("Competition has no participants — cannot start")]
+    CompetitionEmpty,
+
+    #[msg("Competition still has participants — refund them first")]
+    CompetitionNotEmpty,
+
+    #[msg("Competition has already been settled or closed")]
+    CompetitionAlreadySettled,
 }

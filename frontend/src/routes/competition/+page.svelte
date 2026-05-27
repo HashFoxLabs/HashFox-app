@@ -66,8 +66,11 @@
 	let formName = '';
 	let formEntrySol = 0.1;
 	let formMaxParticipants = 3;
-	let formDurationDays = 3;
+	let formDurationValue = 3;
+	let formDurationUnit: 'hours' | 'days' = 'days';
 	$: formTargetSol = formEntrySol * formMaxParticipants;
+	$: formDurationSecs =
+		formDurationUnit === 'hours' ? formDurationValue * 3_600 : formDurationValue * 86_400;
 	let creating = false;
 	let createMsg = '';
 
@@ -397,16 +400,15 @@
 		const name = formName.trim();
 		if (!name) return 'Name required.';
 		if (name.length > COMP_NAME_MAX_LEN) return `Name must be ≤ ${COMP_NAME_MAX_LEN} chars.`;
-		if (!(formEntrySol > 0)) return 'Entry ticket must be > 0.';
+		if (formEntrySol < 0) return 'Entry ticket cannot be negative.';
 		if (!Number.isInteger(formMaxParticipants))
 			return 'Max participants must be a whole number.';
 		if (formMaxParticipants < COMP_MIN_PARTICIPANTS)
 			return `Need at least ${COMP_MIN_PARTICIPANTS} participants.`;
-		if (!Number.isInteger(formDurationDays))
-			return 'Duration must be a whole number of days.';
-		const dur = formDurationDays * 86_400;
-		if (dur < COMP_MIN_DURATION_SECS || dur > COMP_MAX_DURATION_SECS)
-			return `Duration must be between 3 and 21 days.`;
+		if (!Number.isInteger(formDurationValue) || formDurationValue <= 0)
+			return 'Duration must be a positive whole number.';
+		if (formDurationSecs < COMP_MIN_DURATION_SECS || formDurationSecs > COMP_MAX_DURATION_SECS)
+			return `Duration must be between 1 hour and 21 days.`;
 		return null;
 	}
 
@@ -444,8 +446,8 @@
 			const { signature, competition } = await createCompetition(program, wallet.publicKey, {
 				name: formName.trim(),
 				entryTicketSol: formEntrySol,
-				targetSol: formEntrySol * formMaxParticipants,
-				durationSecs: formDurationDays * 86_400
+				maxParticipants: formMaxParticipants,
+				durationSecs: formDurationSecs
 			});
 			createMsg = `Created · ${signature.slice(0, 8)}… · joining…`;
 
@@ -613,7 +615,7 @@
 			<div class="create-form">
 				<div class="cf-head">
 					<strong>Create Competition</strong>
-					<span class="muted">{COMP_MIN_PARTICIPANTS}+ participants · 3 – 21 days · auto-starts when every seat is filled</span>
+					<span class="muted">{COMP_MIN_PARTICIPANTS}+ participants · 1 hour – 21 days · entry can be 0 SOL · auto-starts when every seat is filled</span>
 				</div>
 				<div class="cf-grid">
 					<label class="field">
@@ -622,7 +624,8 @@
 					</label>
 					<label class="field">
 						<span>Entry ticket (SOL)</span>
-						<input type="number" min="0.001" step="0.001" bind:value={formEntrySol} />
+						<input type="number" min="0" step="0.001" bind:value={formEntrySol} />
+						<small>{formEntrySol === 0 ? 'Free entry — no prize pool' : 'Paid entry — pool funded by joiners'}</small>
 					</label>
 					<label class="field">
 						<span>Max participants</span>
@@ -639,18 +642,24 @@
 						<small>= {(formEntrySol * formMaxParticipants).toFixed(3)} SOL pool</small>
 					</label>
 					<label class="field">
-						<span>Duration (days)</span>
-						<input
-							type="number"
-							min={3}
-							max={21}
-							step="1"
-							bind:value={formDurationDays}
-							on:input={(e) => {
-								const v = parseInt((e.target as HTMLInputElement).value, 10);
-								formDurationDays = Number.isFinite(v) ? Math.min(21, Math.max(3, v)) : 3;
-							}}
-						/>
+						<span>Duration</span>
+						<div class="dur-row">
+							<input
+								type="number"
+								min={1}
+								step="1"
+								bind:value={formDurationValue}
+								on:input={(e) => {
+									const v = parseInt((e.target as HTMLInputElement).value, 10);
+									formDurationValue = Number.isFinite(v) && v > 0 ? v : 1;
+								}}
+							/>
+							<select bind:value={formDurationUnit}>
+								<option value="hours">Hours</option>
+								<option value="days">Days</option>
+							</select>
+						</div>
+						<small>= {Math.round(formDurationSecs / 60)} minutes onchain</small>
 					</label>
 				</div>
 				<div class="cf-actions">
@@ -1424,6 +1433,15 @@
 	}
 	.field input:focus { border-color: #ff5a00; }
 	.field small { color: #666; font-family: 'Courier New', monospace; font-size: 10px; }
+	.dur-row { display: flex; gap: 6px; }
+	.dur-row input { flex: 1; min-width: 0; }
+	.dur-row select {
+		background: #000; color: #fff;
+		border: 1px solid #2a2a2a; border-radius: 8px;
+		padding: 9px 8px; font-family: 'Courier New', monospace; font-size: 12px;
+		outline: none; cursor: pointer;
+	}
+	.dur-row select:focus { border-color: #ff5a00; }
 	.cf-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 	.cf-msg { color: #ccc; font-family: 'Courier New', monospace; font-size: 11px; }
 	.cf-hint { color: #777; font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.04em; }

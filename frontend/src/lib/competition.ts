@@ -17,9 +17,10 @@ import {
 import { ALL_MARKETS } from '$lib/markets';
 
 export const COMP_NAME_MAX_LEN = 32;
-export const COMP_MIN_DURATION_SECS = 3 * 86_400;
+export const COMP_MIN_DURATION_SECS = 3_600;
 export const COMP_MAX_DURATION_SECS = 21 * 86_400;
 export const COMP_MIN_PARTICIPANTS = 3;
+export const COMP_MAX_PARTICIPANTS = 10_000;
 
 export type CompetitionStatus = 'pending' | 'active' | 'settled';
 
@@ -246,7 +247,7 @@ export async function createCompetition(
 	params: {
 		name: string;
 		entryTicketSol: number;
-		targetSol: number;
+		maxParticipants: number;
 		durationSecs: number;
 	}
 ): Promise<{ signature: string; competition: PublicKey }> {
@@ -255,14 +256,14 @@ export async function createCompetition(
 	if (name.length > COMP_NAME_MAX_LEN) throw new Error(`Name must be ≤ ${COMP_NAME_MAX_LEN} bytes`);
 
 	const entryTicketLamports = new BN(Math.floor(params.entryTicketSol * LAMPORTS_PER_SOL));
-	const targetLamports = new BN(Math.floor(params.targetSol * LAMPORTS_PER_SOL));
+	const maxParticipants = new BN(Math.floor(params.maxParticipants));
 	const durationSecs = new BN(Math.floor(params.durationSecs));
 
 	const [competition] = findCompetitionPda(creator, name);
 	const [vault] = findCompetitionVaultPda(competition);
 
 	const sig = await program.methods
-		.createCompetition(name, entryTicketLamports, targetLamports, durationSecs)
+		.createCompetition(name, entryTicketLamports, maxParticipants, durationSecs)
 		.accounts(<any>{
 			competition,
 			vault,

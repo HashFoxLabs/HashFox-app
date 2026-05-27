@@ -55,6 +55,354 @@
       ]
     },
     {
+      "name": "admin_close_competition",
+      "docs": [
+        "Admin-only. Tear down a competition that's been fully refunded: sweeps",
+        "any vault dust to treasury and closes the Competition account (rent",
+        "→ authority). Requires participant_count == 0."
+      ],
+      "discriminator": [
+        189,
+        242,
+        95,
+        239,
+        39,
+        178,
+        222,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "competition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "treasury before close."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "admin_force_start_competition",
+      "docs": [
+        "Admin-only. Flip a Pending competition to Active even if the target",
+        "hasn't been reached yet. Useful for kicking off small/test cups or",
+        "running a free comp where there's no lamports target to hit.",
+        "Requires at least 1 participant so the podium has someone to settle to."
+      ],
+      "discriminator": [
+        105,
+        220,
+        42,
+        148,
+        204,
+        161,
+        184,
+        39
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "competition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "admin_refund_participant",
+      "docs": [
+        "Admin-only. Refund a single participant: returns their entry ticket",
+        "from the vault, clears `active_competition` on their main UserAccount,",
+        "closes their comp_user PDA (rent → participant), and decrements",
+        "participant_count + prize_pool. Call once per participant; then call",
+        "`admin_close_competition` to wipe the cup entirely."
+      ],
+      "discriminator": [
+        103,
+        78,
+        78,
+        1,
+        236,
+        47,
+        193,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "competition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition.creator",
+                "account": "Competition"
+              },
+              {
+                "kind": "account",
+                "path": "competition.name [.. competition.name_len as usize]",
+                "account": "Competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "comp_user_account",
+          "docs": [
+            "Participant's per-comp account — closed to the participant on refund."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  95,
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "competition"
+              },
+              {
+                "kind": "account",
+                "path": "participant"
+              }
+            ]
+          }
+        },
+        {
+          "name": "participant_user_account",
+          "docs": [
+            "Participant's main account — `active_competition` cleared here so they",
+            "can join the next cup."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "participant"
+              }
+            ]
+          }
+        },
+        {
+          "name": "participant",
+          "docs": [
+            "against the comp_user_account.owner above."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "buy_no",
       "discriminator": [
         89,
@@ -2100,8 +2448,11 @@
       "docs": [
         "Create a new competition. The creator only configures it — they don't",
         "auto-join, and they have no privileged role afterwards. Status starts",
-        "as `Pending` and flips to `Active` automatically once `participant_count",
-        "* entry_ticket_lamports >= target_lamports` in `join_competition`."
+        "as `Pending` and flips to `Active` automatically once every seat is",
+        "taken (for paid comps: `prize_pool >= target_lamports`; for free comps:",
+        "`participant_count >= max_participants`). Free comps (entry == 0) are",
+        "allowed for any creator; admins can also force-start a Pending cup",
+        "before it's full via `admin_force_start_competition`."
       ],
       "discriminator": [
         110,
@@ -2189,7 +2540,7 @@
           "type": "u64"
         },
         {
-          "name": "target_lamports",
+          "name": "max_participants",
           "type": "u64"
         },
         {
@@ -3564,6 +3915,19 @@
       ]
     },
     {
+      "name": "CompetitionClosed",
+      "discriminator": [
+        83,
+        146,
+        71,
+        39,
+        54,
+        0,
+        36,
+        99
+      ]
+    },
+    {
       "name": "CompetitionCreated",
       "discriminator": [
         20,
@@ -3600,6 +3964,19 @@
         48,
         47,
         204
+      ]
+    },
+    {
+      "name": "CompetitionParticipantRefunded",
+      "discriminator": [
+        91,
+        202,
+        115,
+        126,
+        191,
+        114,
+        101,
+        150
       ]
     },
     {
@@ -3886,12 +4263,12 @@
     {
       "code": 6022,
       "name": "InvalidTargetAllocation",
-      "msg": "Target allocation must be a multiple of the entry ticket and allow at least 3 participants"
+      "msg": "max_participants must be between COMP_MIN_PARTICIPANTS and COMP_MAX_PARTICIPANTS"
     },
     {
       "code": 6023,
       "name": "InvalidCompetitionDuration",
-      "msg": "Competition duration must be between 3 and 21 days"
+      "msg": "Competition duration must be between 1 hour and 21 days"
     },
     {
       "code": 6024,
@@ -3947,6 +4324,21 @@
       "code": 6034,
       "name": "PrizePoolMath",
       "msg": "Prize pool arithmetic overflow"
+    },
+    {
+      "code": 6035,
+      "name": "CompetitionEmpty",
+      "msg": "Competition has no participants — cannot start"
+    },
+    {
+      "code": 6036,
+      "name": "CompetitionNotEmpty",
+      "msg": "Competition still has participants — refund them first"
+    },
+    {
+      "code": 6037,
+      "name": "CompetitionAlreadySettled",
+      "msg": "Competition has already been settled or closed"
     }
   ],
   "types": [
@@ -4101,6 +4493,22 @@
       }
     },
     {
+      "name": "CompetitionClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "swept_to_treasury",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "CompetitionCreated",
       "type": {
         "kind": "struct",
@@ -4176,6 +4584,26 @@
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompetitionParticipantRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "competition",
+            "type": "pubkey"
+          },
+          {
+            "name": "participant",
+            "type": "pubkey"
+          },
+          {
+            "name": "refund_lamports",
+            "type": "u64"
           }
         ]
       }
